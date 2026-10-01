@@ -127,17 +127,29 @@ export default function PublicFooter() {
           </ul>
         </div>
 
-        {/* Certificate */}
-
-<a href="/certificate.png" target="_blank" rel="noopener noreferrer">
-  <Image
-    src="/certificate.png"
-    alt="Company Certificate"
-    width={64}
-    height={80}
-    className="mx-auto rounded-lg mb-2 object-cover cursor-pointer"
-  />
-</a>
+        {/* Company certificate */}
+        <div className="md:col-span-2">
+          <h4 className="text-white font-bold text-sm uppercase tracking-wider mb-5">Company Certificate</h4>
+          <a href="/certificate.png" target="_blank" rel="noopener noreferrer"
+            className="group block rounded-2xl border border-[#c9a84c]/40 bg-[#12121f] p-3 shadow-[0_0_24px_rgba(201,168,76,0.08)] transition-all hover:border-[#e8cc7a] hover:shadow-[0_0_30px_rgba(201,168,76,0.18)]">
+            <div className="relative overflow-hidden rounded-xl border border-white/10 bg-white p-2">
+              <Image
+                src="/certificate.png"
+                alt="AurexConnect company certificate"
+                width={220}
+                height={295}
+                className="h-auto w-full object-contain transition-transform duration-300 group-hover:scale-[1.02]"
+              />
+            </div>
+            <div className="flex items-center justify-between gap-3 px-1 pt-3">
+              <div>
+                <div className="text-sm font-bold text-white">AurexConnect Certificate</div>
+                <div className="text-xs text-gray-400 mt-1">Open full-size document</div>
+              </div>
+              <span className="rounded-lg bg-[#c9a84c] px-2.5 py-1.5 text-[11px] font-black text-[#0a0a14]">VIEW</span>
+            </div>
+          </a>
+        </div>
           {/* Live support badge */}
           <div className="mt-4 bg-green-400/10 border border-green-400/20 rounded-xl p-3 text-center">
             <div className="flex items-center justify-center gap-1.5 mb-1">
