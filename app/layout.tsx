@@ -5,6 +5,7 @@ import { Providers } from './providers'
 import { Toaster } from 'react-hot-toast'
 import CryptoTicker from './components/CryptoTicker' 
 import Script from 'next/script';
+import CommunityActivityTicker from '@/components/home/CommunityActivityTicker'
 
 const inter = localFont({
   src: './fonts/Inter-Variable.ttf',
@@ -17,6 +18,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className={inter.className}>
         <Providers>
           <CryptoTicker />
+          <CommunityActivityTicker />
           {children}
 
           {/* Smartsupp Live Chat - Correct Next.js Implementation */}
