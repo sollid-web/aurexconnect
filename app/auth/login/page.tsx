@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { signIn } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -11,6 +11,10 @@ export default function LoginPage() {
   const [form, setForm] = useState({ email: '', password: '' })
   const [showPass, setShowPass] = useState(false)
   const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('verified') === '1') toast.success('Email verified. You can now sign in.')
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -104,6 +108,9 @@ export default function LoginPage() {
                   className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300">
                   {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
+              </div>
+              <div className="text-right mt-2">
+                <Link href="/auth/forgot-password" className="text-xs text-[#c9a84c] hover:underline">Forgot password?</Link>
               </div>
             </div>
 

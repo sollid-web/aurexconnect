@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { createNotification, Notifs } from '@/lib/notifications'
+import { kycApprovedEmail, kycRejectedEmail, sendEmail } from '@/lib/email'
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions)
@@ -92,6 +93,7 @@ export async function PATCH(req: NextRequest) {
       '/dashboard'
     )
 
+    await sendEmail(submission.user.email, kycApprovedEmail(submission.user.fullName)).catch(error => console.error('[KYC email]', error))
     return NextResponse.json({ message: 'KYC approved' })
   } else {
     await prisma.$transaction([
@@ -121,6 +123,7 @@ export async function PATCH(req: NextRequest) {
       '/dashboard/kyc'
     )
 
+    await sendEmail(submission.user.email, kycRejectedEmail(submission.user.fullName, adminNote)).catch(error => console.error('[KYC email]', error))
     return NextResponse.json({ message: 'KYC rejected' })
   }
 }

@@ -60,52 +60,16 @@ async function main() {
 
   // ── Investment plans ────────────────────────────────────
   const plansData = [
-    {
-      name: 'Basic Plan',
-      roiPercent: 8,
-      minAmount: 200,
-      maxAmount: 1999,
-      durationDays: 7,
-      referralBonus: 5,
-      description: 'Quick returns. Perfect for beginners.',
-      features: ['8% Daily ROI', '$200 – $1,999 Investment', '7 Day Duration', '5% Referral Bonus', '24/7 Support'],
-    },
-    {
-      name: 'Golden Plan',
-      roiPercent: 15,
-      minAmount: 2000,
-      maxAmount: 29000,
-      durationDays: 14,
-      referralBonus: 7,
-      description: 'Higher returns for serious investors.',
-      features: ['15% Daily ROI', '$2,000 – $29,000 Investment', '14 Day Duration', '7% Referral Bonus', 'Priority Support'],
-    },
-    {
-      name: 'Mega Plan',
-      roiPercent: 25,
-      minAmount: 30000,
-      maxAmount: 99000,
-      durationDays: 30,
-      referralBonus: 10,
-      description: 'Maximum gains for committed investors.',
-      features: ['25% Daily ROI', '$30,000 – $99,000 Investment', '30 Day Duration', '10% Referral Bonus', 'Dedicated Manager'],
-    },
-    {
-      name: 'Premium plan',
-      roiPercent: 50,
-      minAmount: 100000,
-      maxAmount: 500000,
-      durationDays: 30,
-      referralBonus: 15,
-      description: 'Exclusive VIP tier with the highest returns.',
-      features: ['50% Daily ROI', '$100,000+ Investment', '30 Day Duration', '15% Referral Bonus', 'VIP Account Manager'],
-    },
+    { name: 'Gold Plan', roiPercent: 8, minAmount: 50, maxAmount: 999, durationDays: 1, referralBonus: 5, description: 'A short-term entry plan with ROI credited within 24 hours.', features: ['8% total ROI', '$50 – $999 Investment', '24 Hour Duration', '5% Referral Bonus', '24/7 Support'] },
+    { name: 'Silver Plan', roiPercent: 30, minAmount: 1000, maxAmount: 4999, durationDays: 1, referralBonus: 5, description: 'A higher-capital plan with ROI credited within 24 hours.', features: ['30% total ROI', '$1,000 – $4,999 Investment', '24 Hour Duration', '5% Referral Bonus', 'Priority Support'] },
+    { name: 'Bronze Plan', roiPercent: 60, minAmount: 10000, maxAmount: 49999, durationDays: 3, referralBonus: 5, description: 'A three-day plan for committed investors seeking a larger allocation.', features: ['60% total ROI', '$10,000 – $49,999 Investment', '3 Day Duration', '5% Referral Bonus', 'Dedicated Support'] },
+    { name: 'Diamond Plan', roiPercent: 120, minAmount: 100000, maxAmount: null, durationDays: 30, referralBonus: 5, description: 'The highest-capital plan with a one-month investment duration.', features: ['120% total ROI', '$100,000+ Investment', '1 Month Duration', '5% Referral Bonus', 'VIP Account Support'] },
   ]
 
   for (const plan of plansData) {
     await prisma.plan.upsert({
       where: { name: plan.name },
-      update: {},
+      update: plan,
       create: plan,
     })
   }
@@ -129,7 +93,7 @@ async function main() {
   console.log('✅ Wallet addresses seeded')
 
   // ── Demo transactions and data ──────────────────────────
-  const basicPlan = await prisma.plan.findUnique({ where: { name: 'Basic Plan' } })
+  const goldPlan = await prisma.plan.findUnique({ where: { name: 'Gold Plan' } })
 
   await prisma.transaction.create({
     data: {
@@ -155,14 +119,14 @@ async function main() {
     },
   })
 
-  if (basicPlan) {
-    const pastDate = addDays(new Date(), -2)
+  if (goldPlan) {
+    const pastDate = addDays(new Date(), -1)
     await prisma.investment.create({
       data: {
         userId: demoUser.id,
-        planId: basicPlan.id,
-        amount: 200,
-        expectedProfit: 16,
+        planId: goldPlan.id,
+        amount: 50,
+        expectedProfit: 4,
         status: 'ACTIVE',
         startDate: pastDate,
         endDate: new Date(),

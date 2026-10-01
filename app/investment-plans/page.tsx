@@ -3,39 +3,18 @@ import Link from 'next/link'
 import PublicHeader from '@/components/layout/PublicHeader'
 import PublicFooter from '@/components/layout/PublicFooter'
 import { CheckCircle, ArrowRight, Shield, Clock, Zap } from 'lucide-react'
+import { INVESTMENT_PLANS, durationLabel } from '@/lib/plans'
 
-const PLANS = [
-  {
-    name: 'Basic Plan', roi: '8%', min: 200, max: 1999, duration: '24 Hours', durationDays: 1,
-    referral: '5%', color: '#c9a84c', glow: 'rgba(201,168,76,0.12)', popular: false,
-    features: ['8% daily return on investment', 'Minimum $50 — Maximum $999', 'Profit returned in 24 hours', '5% referral bonus', 'Capital insured', '24/7 support access'],
-    desc: 'Perfect for beginners. Get your feet wet with daily compounding returns on a low minimum.',
-  },
-  {
-    name: 'Golden Plan', roi: '15%', min: 2000, max: 4999, duration: '3 Days', durationDays: 3,
-    referral: '7%', color: '#e2e8f0', glow: 'rgba(226,232,240,0.08)', popular: true,
-    features: ['15% ROI in 3 days', 'Minimum $1,000 — Maximum $4,999', 'Profit returned in 3 days', '7% referral bonus', 'Capital insured', 'Priority support'],
-    desc: 'Our most popular plan. Higher returns over 3 days, ideal for committed investors seeking growth.',
-  },
-  {
-    name: 'Mega Plan', roi: '25%', min: 100000, max: 19999, duration: '7 Days', durationDays: 7,
-    referral: '10%', color: '#7dd3fc', glow: 'rgba(125,211,252,0.10)', popular: false,
-    features: ['25% ROI in 7 days', 'Minimum $5,000 — Maximum $19,999', 'Profit returned in 7 days', '10% referral bonus', 'Capital insured', 'Dedicated account manager'],
-    desc: 'For serious investors. Maximum weekly gains with a dedicated manager overseeing your portfolio.',
-  },
-  {
-    name: 'Premium Plan', roi: '50%', min: 100000, max: 500000, duration: '14 Days', durationDays: 14,
-    referral: '15%', color: '#c084fc', glow: 'rgba(192,132,252,0.12)', popular: false,
-    features: ['50% ROI in 14 days', 'Minimum $20,000 — No upper limit', 'Profit returned in 14 days', '15% referral bonus', 'Capital insured', 'VIP account manager + priority withdrawals'],
-    desc: 'Exclusive VIP tier. Institutional-level returns for elite investors with high capital commitment.',
-  },
-]
-
+const PLANS = INVESTMENT_PLANS.map(plan => ({
+  name: plan.name, roi: `${plan.roiPercent}%`, min: plan.minAmount, max: plan.maxAmount,
+  duration: durationLabel(plan.durationDays), referral: `${plan.referralBonus}%`, color: plan.color,
+  glow: `${plan.color}20`, popular: plan.popular, features: plan.features, desc: plan.description,
+}))
 const HOW_IT_WORKS = [
   { step: '01', title: 'Create an Account', desc: 'Register in under 2 minutes. Verify your identity with our KYC process to unlock full access.', icon: Zap },
   { step: '02', title: 'Deposit Funds',      desc: 'Fund your account with Bitcoin, Ethereum, or USDT. Deposits are credited within 30 minutes.', icon: Shield },
   { step: '03', title: 'Choose a Plan',      desc: 'Select the investment plan that matches your capital and return goals. Activate instantly.', icon: ArrowRight },
-  { step: '04', title: 'Earn & Withdraw',    desc: 'Your principal + profit is returned automatically when the plan matures. Withdraw anytime.', icon: CheckCircle },
+  { step: '04', title: 'Earn & Withdraw',    desc: 'ROI is credited according to the selected plan schedule, while principal is returned when the plan matures. Withdraw eligible funds anytime.', icon: CheckCircle },
 ]
 
 export default function InvestmentPlansPage() {
@@ -54,7 +33,7 @@ export default function InvestmentPlansPage() {
           <div className="text-[#c9a84c] text-sm font-semibold uppercase tracking-widest mb-4">Earn With Us</div>
           <h1 className="text-5xl md:text-6xl font-black mb-6">Investment <span className="gold-text">Plans</span></h1>
           <p className="text-gray-400 text-lg max-w-2xl mx-auto">
-            Four tiers. Every risk appetite. All returns guaranteed and capital-insured. Start with $50 and scale as you grow.
+            Four client-defined tiers with clearly stated ROI, duration, referral bonus, and investment limits. Start with $50 and scale as you grow.
           </p>
         </div>
       </section>
@@ -75,7 +54,7 @@ export default function InvestmentPlansPage() {
               <div className="p-6 pb-4">
                 <div className="text-xs font-bold uppercase tracking-widest mb-3" style={{ color: plan.color }}>{plan.name}</div>
                 <div className="text-6xl font-black leading-none" style={{ color: plan.color }}>{plan.roi}</div>
-                <div className="text-gray-500 text-xs mt-1.5">ROI in {plan.duration}</div>
+                <div className="text-gray-500 text-xs mt-1.5">Total ROI over {plan.duration}</div>
                 <p className="text-gray-500 text-xs mt-3 leading-relaxed">{plan.desc}</p>
               </div>
 
@@ -134,9 +113,9 @@ export default function InvestmentPlansPage() {
           <h2 className="text-3xl font-black mb-6">What Could You Earn?</h2>
           <div className="grid grid-cols-3 gap-4 mb-8">
             {[
-              { plan: 'Basic Plan', invest: '$500', profit: '+$40', total: '$540', period: '24h' },
-              { plan: 'Platinum', invest: '$2,000', profit: '+$300', total: '$2,300', period: '3 days' },
-              { plan: 'Diamond',  invest: '$10,000', profit: '+$2,500', total: '$12,500', period: '7 days' },
+              { plan: 'Gold Plan', invest: '$500', profit: '+$40', total: '$540', period: '24h' },
+              { plan: 'Silver Plan', invest: '$2,000', profit: '+$600', total: '$2,600', period: '24h' },
+              { plan: 'Bronze Plan', invest: '$30,000', profit: '+$18,000', total: '$48,000', period: '3 days' },
             ].map(e => (
               <div key={e.plan} className="bg-[#0a0a14] border border-[#1e1e35] rounded-xl p-4">
                 <div className="text-xs text-gray-500 mb-2">{e.plan}</div>

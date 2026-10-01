@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react'
-import { Copy, CheckCircle, Upload, Bitcoin } from 'lucide-react'
+import { Copy, CheckCircle, Upload } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 const WALLETS = [
@@ -27,11 +27,20 @@ export default function DepositPage() {
     e.preventDefault()
     if (!amount || !txHash) return toast.error('Please fill all fields')
     setSubmitting(true)
-    // In a real system, this would create a pending deposit transaction for admin approval
-    await new Promise(r => setTimeout(r, 1500))
-    toast.success('Deposit submitted for review! Your balance will be updated within 30 minutes.')
-    setAmount('')
-    setTxHash('')
+    try {
+      const res = await fetch('/api/transactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'DEPOSIT', amount: Number(amount), currency: selected.currency, txHash: txHash.trim() }),
+      })
+      const data = await res.json()
+      if (!res.ok) return toast.error(data.error || 'Deposit submission failed')
+      toast.success('Deposit submitted for review!')
+      setAmount('')
+      setTxHash('')
+    } catch {
+      toast.error('Deposit submission failed. Please try again.')
+    }
     setSubmitting(false)
   }
 

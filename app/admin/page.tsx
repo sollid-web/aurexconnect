@@ -3,17 +3,18 @@ import { useEffect, useState, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { formatCurrency, formatDate, getStatusColor } from '@/lib/utils'
+import { durationLabel, formatUsd } from '@/lib/plans'
 import {
   Users, DollarSign, ArrowUpCircle, ArrowDownCircle,
   Search, UserCheck, UserX, PlusCircle, Loader2,
   FileCheck, CheckCircle, XCircle, Eye, Clock,
   TrendingUp, Shield, BarChart3, AlertTriangle, X,
   MinusCircle, Wallet, ListOrdered, ChevronRight,
-  Receipt, ToggleLeft, ToggleRight
+  Receipt, ToggleLeft, ToggleRight, Mail
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
-type Tab = 'overview' | 'deposits' | 'withdrawals' | 'kyc' | 'users' | 'roi'
+type Tab = 'overview' | 'deposits' | 'withdrawals' | 'kyc' | 'users' | 'roi' | 'email'
 
 // ─────────────────────────────────────────────────────────────────────
 // Shared helpers
@@ -299,7 +300,7 @@ function UserDrawer({ userId, onClose, onRefresh }: { userId: string; onClose: (
                         className="w-full bg-[#12121f] border border-[#1e1e35] rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#c9a84c]">
                         {plans.map(p => (
                           <option key={p.id} value={p.id}>
-                            {p.name} — {p.roiPercent}% ROI in {p.durationDays}d (${p.minAmount}–${p.maxAmount})
+                            {p.name} — {p.roiPercent}% ROI over {durationLabel(p.durationDays)} ({formatUsd(p.minAmount)}–{formatUsd(p.maxAmount)})
                           </option>
                         ))}
                       </select>
@@ -308,8 +309,8 @@ function UserDrawer({ userId, onClose, onRefresh }: { userId: string; onClose: (
                       <div className="grid grid-cols-3 gap-2 text-xs text-center">
                         {[
                           { label: 'ROI', value: `${selectedPlan.roiPercent}%`, color: '#c9a84c' },
-                          { label: 'Duration', value: `${selectedPlan.durationDays}d`, color: '#60a5fa' },
-                          { label: 'Range', value: `$${selectedPlan.minAmount}+`, color: '#34d399' },
+                          { label: 'Duration', value: durationLabel(selectedPlan.durationDays), color: '#60a5fa' },
+                          { label: 'Range', value: `${formatUsd(selectedPlan.minAmount)}–${formatUsd(selectedPlan.maxAmount)}`, color: '#34d399' },
                         ].map(s => (
                           <div key={s.label} className="bg-[#12121f] border border-[#1e1e35] rounded-lg py-2">
                             <div className="text-gray-500 mb-0.5">{s.label}</div>
@@ -321,12 +322,12 @@ function UserDrawer({ userId, onClose, onRefresh }: { userId: string; onClose: (
                     <div>
                       <label className="block text-xs text-gray-400 mb-1.5">
                         Investment Amount (USD) *
-                        {selectedPlan && <span className="text-gray-600 ml-1">Min: ${selectedPlan.minAmount} · Max: ${selectedPlan.maxAmount}</span>}
+                        {selectedPlan && <span className="text-gray-600 ml-1">Range: {formatUsd(selectedPlan.minAmount)} – {formatUsd(selectedPlan.maxAmount)}</span>}
                       </label>
                       <div className="relative">
                         <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">$</span>
                         <input type="number" value={investAmount} onChange={e => setInvestAmount(e.target.value)}
-                          min={selectedPlan?.minAmount} max={selectedPlan?.maxAmount}
+                          min={selectedPlan?.minAmount} max={selectedPlan?.maxAmount ?? undefined}
                           placeholder={selectedPlan ? String(selectedPlan.minAmount) : '0'}
                           className="w-full bg-[#12121f] border border-[#1e1e35] rounded-xl pl-8 pr-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-[#c9a84c]" />
                       </div>
@@ -628,6 +629,7 @@ function KycTab() {
   const [filter, setFilter] = useState('PENDING')
   const [reviewing, setReviewing] = useState<any>(null)
   const [actionLoading, setActionLoading] = useState(false)
+  const [signedFiles, setSignedFiles] = useState<Record<string, string>>({})
 
   const fetch_ = useCallback(async () => {
     setLoading(true)
@@ -638,6 +640,16 @@ function KycTab() {
   }, [filter])
 
   useEffect(() => { fetch_() }, [fetch_])
+
+  useEffect(() => {
+    if (!reviewing) { setSignedFiles({}); return }
+    const paths = [reviewing.frontImageUrl, reviewing.backImageUrl, reviewing.selfieUrl].filter(Boolean)
+    Promise.all(paths.map(async (path: string) => {
+      const response = await fetch(`/api/admin/kyc/file?path=${encodeURIComponent(path)}`)
+      const data = await response.json()
+      return [path, data.url] as const
+    })).then(entries => setSignedFiles(Object.fromEntries(entries.filter(([, url]) => url))))
+  }, [reviewing])
 
   const handleReview = async (action: 'approve' | 'reject', note: string) => {
     setActionLoading(true)
@@ -702,8 +714,8 @@ function KycTab() {
             ))}
           </div>
           <div className="grid grid-cols-3 gap-2">
-            {[{ label: 'Front', url: reviewing.frontImageUrl }, { label: 'Back', url: reviewing.backImageUrl }, { label: 'Selfie', url: reviewing.selfieUrl }].filter(i => i.url).map(({ label, url }) => (
-              <a key={label} href={url} target="_blank" rel="noopener noreferrer" className="block bg-[#0a0a14] border border-[#1e1e35] rounded-xl p-3 text-center hover:border-[#c9a84c]/40 transition-all">
+            {[{ label: 'Front', path: reviewing.frontImageUrl }, { label: 'Back', path: reviewing.backImageUrl }, { label: 'Selfie', path: reviewing.selfieUrl }].filter(i => i.path && signedFiles[i.path]).map(({ label, path }) => (
+              <a key={label} href={signedFiles[path]} target="_blank" rel="noopener noreferrer" className="block bg-[#0a0a14] border border-[#1e1e35] rounded-xl p-3 text-center hover:border-[#c9a84c]/40 transition-all">
                 <div className="text-xs text-gray-500 mb-1">{label}</div><div className="text-[#c9a84c] text-xs">View ↗</div>
               </a>
             ))}
@@ -811,7 +823,7 @@ function RoiTab() {
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <div><h3 className="font-bold">ROI Engine Logs</h3><p className="text-gray-500 text-sm">Runs hourly via Vercel Cron. Each row = one run.</p></div>
+        <div><h3 className="font-bold">Daily ROI Engine Logs</h3><p className="text-gray-500 text-sm">Runs hourly via Vercel Cron and credits each investment's daily installment once per day.</p></div>
         <button onClick={triggerManual} disabled={triggering} className="btn-gold px-5 py-2.5 rounded-xl text-sm flex items-center gap-2 disabled:opacity-60">
           {triggering ? <Loader2 size={14} className="animate-spin" /> : <TrendingUp size={14} />} Trigger Manual Run
         </button>
@@ -838,6 +850,62 @@ function RoiTab() {
             </table>
           </div>
         )}
+      </div>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Email Composer Tab
+// ─────────────────────────────────────────────────────────────────────
+function EmailTab() {
+  const [users, setUsers] = useState<any[]>([])
+  const [selected, setSelected] = useState<string[]>([])
+  const [audience, setAudience] = useState<'all' | 'selected'>('selected')
+  const [template, setTemplate] = useState<'random' | 'custom'>('random')
+  const [subject, setSubject] = useState('')
+  const [message, setMessage] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [sending, setSending] = useState(false)
+
+  useEffect(() => {
+    fetch('/api/admin/email').then(response => response.json()).then(data => {
+      setUsers(data.users || [])
+      setLoading(false)
+    }).catch(() => setLoading(false))
+  }, [])
+
+  const toggleUser = (id: string) => setSelected(current => current.includes(id) ? current.filter(item => item !== id) : [...current, id])
+  const selectAll = () => setSelected(selected.length === users.length ? [] : users.map(user => user.id))
+
+  const sendCampaign = async () => {
+    if (audience === 'selected' && selected.length === 0) return toast.error('Select at least one recipient')
+    if (template === 'custom' && (!subject.trim() || message.trim().length < 10)) return toast.error('Enter a subject and message of at least 10 characters')
+    setSending(true)
+    try {
+      const response = await fetch('/api/admin/email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ audience, userIds: selected, template, subject, message }),
+      })
+      const data = await response.json()
+      if (!response.ok) toast.error(data.error || 'Campaign failed')
+      else toast.success(`${data.sent} email${data.sent === 1 ? '' : 's'} sent${data.failed ? ` · ${data.failed} failed` : ''}`)
+    } catch { toast.error('Campaign failed') } finally { setSending(false) }
+  }
+
+  return (
+    <div className="space-y-6 max-w-5xl">
+      <div><h3 className="font-bold text-xl">Email Center</h3><p className="text-gray-500 text-sm mt-1">Send a randomized account update or custom branded message to all active users or selected recipients.</p></div>
+      <div className="grid lg:grid-cols-2 gap-5">
+        <div className="card-dark p-6 space-y-5">
+          <div><label className="block text-sm font-medium text-gray-300 mb-2">Recipient group</label><div className="grid grid-cols-2 gap-2">{(['selected', 'all'] as const).map(option => <button key={option} onClick={() => setAudience(option)} className={`py-3 rounded-xl border text-sm font-semibold ${audience === option ? 'border-[#c9a84c] bg-[#c9a84c]/10 text-[#c9a84c]' : 'border-[#1e1e35] text-gray-400'}`}>{option === 'all' ? `All active users (${users.length})` : `Selected (${selected.length})`}</button>)}</div></div>
+          <div><label className="block text-sm font-medium text-gray-300 mb-2">Message template</label><select value={template} onChange={event => setTemplate(event.target.value as 'random' | 'custom')} className="w-full bg-[#0a0a14] border border-[#1e1e35] rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#c9a84c]"><option value="random">Randomized professional account update</option><option value="custom">Custom branded message</option></select></div>
+          {template === 'custom' && <><div><label className="block text-sm font-medium text-gray-300 mb-2">Subject</label><input value={subject} onChange={event => setSubject(event.target.value)} maxLength={160} placeholder="Your AurexConnect update" className="w-full bg-[#0a0a14] border border-[#1e1e35] rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-[#c9a84c]" /></div><div><label className="block text-sm font-medium text-gray-300 mb-2">Message</label><textarea value={message} onChange={event => setMessage(event.target.value)} rows={7} maxLength={5000} placeholder="Write a clear, professional message..." className="w-full bg-[#0a0a14] border border-[#1e1e35] rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-[#c9a84c] resize-none" /></div></>}
+          <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-4 text-blue-300 text-xs leading-relaxed">Randomized messages are selected per recipient and include a personalized greeting plus a secure dashboard link. Transactional emails such as ROI, deposits, withdrawals, and KYC decisions are sent automatically.</div>
+          <button onClick={sendCampaign} disabled={sending || (audience === 'selected' && selected.length === 0)} className="btn-gold w-full py-3 rounded-xl flex items-center justify-center gap-2 disabled:opacity-50">{sending ? <><Loader2 size={16} className="animate-spin" /> Sending...</> : <><Mail size={16} /> Send email campaign</>}</button>
+        </div>
+        <div className="card-dark overflow-hidden"><div className="p-5 border-b border-[#1e1e35] flex items-center justify-between"><div><h4 className="font-bold">Active recipients</h4><p className="text-gray-500 text-xs mt-1">Only active investor accounts are listed.</p></div><button onClick={selectAll} className="text-xs text-[#c9a84c] hover:underline">{selected.length === users.length ? 'Clear all' : 'Select all'}</button></div>{loading ? <div className="h-64 flex items-center justify-center"><Spinner /></div> : <div className="max-h-[520px] overflow-y-auto divide-y divide-[#1e1e35]">{users.map(user => <label key={user.id} className="flex items-center gap-3 p-4 hover:bg-white/5 cursor-pointer"><input type="checkbox" checked={selected.includes(user.id)} onChange={() => toggleUser(user.id)} className="accent-[#c9a84c]" /><span className="min-w-0"><span className="block text-sm text-white truncate">{user.fullName}</span><span className="block text-xs text-gray-500 truncate">{user.email}</span></span></label>)}{users.length === 0 && <div className="p-8 text-center text-gray-500 text-sm">No active users found.</div>}</div>}</div>
       </div>
     </div>
   )
@@ -910,6 +978,7 @@ export default function AdminPage() {
     { id: 'kyc', label: 'KYC Review', icon: FileCheck },
     { id: 'users', label: 'Users', icon: Users },
     { id: 'roi', label: 'ROI Engine', icon: TrendingUp },
+    { id: 'email', label: 'Email Center', icon: Mail },
   ] as const
 
   return (
@@ -940,6 +1009,7 @@ export default function AdminPage() {
         {activeTab === 'kyc' && <KycTab />}
         {activeTab === 'users' && <UsersTab />}
         {activeTab === 'roi' && <RoiTab />}
+        {activeTab === 'email' && <EmailTab />}
       </div>
     </div>
   )

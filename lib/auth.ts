@@ -28,6 +28,10 @@ export const authOptions: NextAuthOptions = {
           throw new Error('Your account has been suspended. Contact support.')
         }
 
+        if (process.env.REQUIRE_EMAIL_VERIFICATION !== 'false' && !user.emailVerified) {
+          throw new Error('Please verify your email address before signing in.')
+        }
+
         const passwordMatch = await bcrypt.compare(credentials.password, user.password)
         if (!passwordMatch) {
           throw new Error('Invalid email or password')

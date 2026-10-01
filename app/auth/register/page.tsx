@@ -53,9 +53,9 @@ export default function RegisterPage() {
           <span className="text-xl font-bold"><span className="gold-text">Aurex</span>Connect</span>
         </Link>
         <div className="relative z-10 space-y-6">
-          <h2 className="text-4xl font-black leading-tight">Join 14,000+<br /><span className="gold-text">smart investors</span></h2>
+                  <h2 className="text-4xl font-black leading-tight">Join 14,000+<br /><span className="gold-text">smart investors</span></h2>
           <div className="space-y-3">
-            {['Up to 50% ROI in 14 days','Crypto, Forex & Hedge Fund options','Withdraw earnings anytime','Referral bonuses on every plan'].map(f => (
+                    {['Up to 120% total ROI','Plans from 24 hours to 1 month','Withdraw earnings anytime','5% referral bonus on every plan'].map(f => (
               <div key={f} className="flex items-center gap-3 text-sm text-gray-400">
                 <div className="w-5 h-5 rounded-full gold-gradient flex items-center justify-center flex-shrink-0">
                   <span className="text-[#0a0a14] text-xs font-black">✓</span>

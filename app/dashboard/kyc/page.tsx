@@ -50,10 +50,8 @@ export default function KycPage() {
   const [form, setForm] = useState({
     documentType: 'passport',
     documentNumber: '',
-    frontImageUrl: '',
-    backImageUrl: '',
-    selfieUrl: '',
   })
+  const [files, setFiles] = useState<{ frontImageUrl?: File; backImageUrl?: File; selfieUrl?: File }>({})
 
   useEffect(() => {
     fetch('/api/kyc')
@@ -71,15 +69,25 @@ export default function KycPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!form.documentNumber || !form.frontImageUrl || !form.selfieUrl) {
-      return toast.error('Please fill all required fields')
+    if (!form.documentNumber || !files.frontImageUrl || !files.selfieUrl) {
+      return toast.error('Please provide your document number, front image, and selfie')
     }
     setSubmitting(true)
     try {
+      const uploaded: Record<string, string> = {}
+      for (const [field, file] of Object.entries(files)) {
+        if (!file) continue
+        const upload = new FormData()
+        upload.append('file', file)
+        const uploadRes = await fetch('/api/kyc/upload', { method: 'POST', body: upload })
+        const uploadData = await uploadRes.json()
+        if (!uploadRes.ok) throw new Error(uploadData.error || 'Document upload failed')
+        uploaded[field] = uploadData.path
+      }
       const res = await fetch('/api/kyc', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, ...uploaded }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -87,9 +95,10 @@ export default function KycPage() {
       } else {
         toast.success('KYC submitted successfully!')
         setKycStatus('PENDING')
+        setFiles({})
       }
     } catch {
-      toast.error('Submission failed')
+      toast.error('Submission failed. Please try again.')
     } finally {
       setSubmitting(false)
     }
@@ -174,31 +183,23 @@ export default function KycPage() {
               </div>
 
               <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-4 text-blue-400 text-xs space-y-1">
-                <div className="font-semibold">Image Upload Note</div>
-                <div>For image fields below, paste a direct image URL (e.g. from Cloudinary, ImgBB, or any file host).</div>
-                <div>In a production setup, these would be secure file upload inputs directly to Supabase Storage.</div>
+                <div className="font-semibold">Secure document upload</div>
+                <div>Images are uploaded to private storage and are accessible only to authorized compliance staff.</div>
+                <div>JPG, PNG, or WEBP images up to 8 MB each.</div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Front of Document (URL) *</label>
-                <input type="url" required value={form.frontImageUrl} onChange={set('frontImageUrl')}
-                  placeholder="https://example.com/front-of-id.jpg"
-                  className="w-full bg-[#0a0a14] border border-[#1e1e35] rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-[#c9a84c]" />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Back of Document (URL) — if applicable</label>
-                <input type="url" value={form.backImageUrl} onChange={set('backImageUrl')}
-                  placeholder="https://example.com/back-of-id.jpg"
-                  className="w-full bg-[#0a0a14] border border-[#1e1e35] rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-[#c9a84c]" />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Selfie Holding Document (URL) *</label>
-                <input type="url" required value={form.selfieUrl} onChange={set('selfieUrl')}
-                  placeholder="https://example.com/selfie-with-id.jpg"
-                  className="w-full bg-[#0a0a14] border border-[#1e1e35] rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-[#c9a84c]" />
-              </div>
+              {[
+                ['frontImageUrl', 'Front of Document *', true],
+                ['backImageUrl', 'Back of Document — if applicable', false],
+                ['selfieUrl', 'Selfie Holding Document *', true],
+              ].map(([field, label, required]) => (
+                <div key={field as string}>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">{label as string}</label>
+                  <input type="file" required={required as boolean} accept="image/jpeg,image/png,image/webp"
+                    onChange={e => setFiles(current => ({ ...current, [field as string]: e.target.files?.[0] }))}
+                    className="w-full bg-[#0a0a14] border border-[#1e1e35] rounded-xl px-4 py-3 text-sm text-gray-300 file:mr-3 file:rounded-lg file:border-0 file:bg-[#c9a84c] file:px-3 file:py-2 file:font-semibold file:text-[#0a0a14]" />
+                </div>
+              ))}
 
               <div className="flex items-start gap-3 bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-4">
                 <AlertTriangle size={16} className="text-yellow-400 flex-shrink-0 mt-0.5" />

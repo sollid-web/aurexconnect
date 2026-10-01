@@ -1,175 +1,140 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { createNotification, Notifs } from '@/lib/notifications'
+import { dailyRoiEmail, referralBonusEmail, sendEmail } from '@/lib/email'
+
+const DAY_MS = 24 * 60 * 60 * 1000
 
 /**
- * ROI Engine — runs on a schedule (Vercel Cron or external trigger).
- * Finds all ACTIVE investments whose endDate has passed,
- * credits principal + profit to the user, creates a PROFIT transaction,
- * handles referral bonus, and logs the run.
- *
- * Protected by CRON_SECRET env variable.
- * Schedule: every hour  →  add to vercel.json:
- * { "crons": [{ "path": "/api/cron/process-roi", "schedule": "0 * * * *" }] }
+ * Daily ROI engine. Run hourly; each investment is paid only for completed
+ * 24-hour installments, so repeated cron calls are idempotent.
  */
 export async function GET(req: NextRequest) {
-  // ── Auth check ──────────────────────────────────────────
   const authHeader = req.headers.get('authorization')
   const cronSecret = process.env.CRON_SECRET
-
   if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
   const startTime = Date.now()
+  let investmentsFound = 0
   let investmentsDone = 0
   let totalProfitPaid = 0
   const errors: string[] = []
 
   try {
-    // ── Find all matured, active investments ────────────────
-    const dueInvestments = await prisma.investment.findMany({
-      where: {
-        status: 'ACTIVE',
-        endDate: { lte: new Date() },
-      },
-      include: {
-        plan: true,
-        user: true,
-      },
+    const activeInvestments = await prisma.investment.findMany({
+      where: { status: 'ACTIVE' },
+      include: { plan: true, user: true },
+      orderBy: { createdAt: 'asc' },
     })
+    investmentsFound = activeInvestments.length
 
-    console.log(`[ROI Engine] Found ${dueInvestments.length} matured investments`)
-
-    for (const inv of dueInvestments) {
+    for (const investment of activeInvestments) {
       try {
-        const totalReturn = inv.amount + inv.expectedProfit
+        const result = await prisma.$transaction(async tx => {
+          const current = await tx.investment.findUnique({
+            where: { id: investment.id },
+            include: { plan: true, user: true },
+          })
+          if (!current || current.status !== 'ACTIVE') return null
 
-        // ── Atomic transaction: complete investment + credit user ──
-        await prisma.$transaction(async (tx) => {
-          // 1. Mark investment as completed
+          const now = new Date()
+          const elapsedInstallments = Math.min(
+            current.plan.durationDays,
+            Math.max(0, Math.floor((now.getTime() - current.startDate.getTime()) / DAY_MS))
+          )
+          const targetPaid = Number(Math.min(
+            current.expectedProfit,
+            (current.expectedProfit / current.plan.durationDays) * elapsedInstallments
+          ).toFixed(2))
+          const roiDue = Number(Math.max(0, targetPaid - current.roiPaid).toFixed(2))
+          const matured = now >= current.endDate
+          if (roiDue <= 0 && !matured) return null
+
+          const nextRoiPaid = Number((current.roiPaid + roiDue).toFixed(2))
+          const shouldComplete = matured && nextRoiPaid >= Number((current.expectedProfit - 0.01).toFixed(2))
+          const creditAmount = Number((roiDue + (shouldComplete ? current.amount : 0)).toFixed(2))
+
           await tx.investment.update({
-            where: { id: inv.id },
+            where: { id: current.id },
             data: {
-              status: 'COMPLETED',
-              completedAt: new Date(),
+              roiPaid: nextRoiPaid,
+              lastRoiPaidAt: roiDue > 0 ? now : current.lastRoiPaidAt,
+              ...(shouldComplete ? { status: 'COMPLETED', completedAt: now } : {}),
             },
           })
 
-          // 2. Credit principal + profit back to user balance
-          await tx.user.update({
-            where: { id: inv.userId },
-            data: {
-              balance: { increment: totalReturn },
-              totalProfit: { increment: inv.expectedProfit },
-            },
-          })
-
-          // 3. Create profit transaction record
-          await tx.transaction.create({
-            data: {
-              userId: inv.userId,
-              type: 'PROFIT',
-              status: 'COMPLETED',
-              amount: inv.expectedProfit,
-              note: `ROI from ${inv.plan.name} — ${inv.plan.roiPercent}% over ${inv.plan.durationDays} day(s)`,
-            },
-          })
-
-          // 4. Handle referral bonus if user was referred
-          if (inv.user.referredBy) {
-            const referralBonus = (inv.amount * inv.plan.referralBonus) / 100
-
-            const referrer = await tx.user.findUnique({
-              where: { id: inv.user.referredBy },
-              select: { id: true, isActive: true },
+          if (creditAmount > 0) {
+            await tx.user.update({
+              where: { id: current.userId },
+              data: {
+                balance: { increment: creditAmount },
+                totalProfit: { increment: roiDue },
+              },
             })
+          }
 
+          if (roiDue > 0) {
+            await tx.transaction.create({
+              data: {
+                userId: current.userId,
+                type: 'PROFIT',
+                status: 'COMPLETED',
+                amount: roiDue,
+                note: `${shouldComplete ? 'Final ' : 'Daily '}ROI from ${current.plan.name}`,
+              },
+            })
+          }
+
+          let referral: { id: string; email: string; fullName: string; amount: number } | null = null
+          if (shouldComplete && current.user.referredBy) {
+            const referralBonus = Number(((current.amount * current.plan.referralBonus) / 100).toFixed(2))
+            const referrer = await tx.user.findUnique({ where: { id: current.user.referredBy }, select: { id: true, email: true, fullName: true, isActive: true } })
             if (referrer?.isActive) {
-              await tx.user.update({
-                where: { id: referrer.id },
-                data: {
-                  balance: { increment: referralBonus },
-                  totalProfit: { increment: referralBonus },
-                },
-              })
-
-              await tx.transaction.create({
-                data: {
-                  userId: referrer.id,
-                  type: 'REFERRAL_BONUS',
-                  status: 'COMPLETED',
-                  amount: referralBonus,
-                  note: `Referral bonus from ${inv.user.fullName}'s ${inv.plan.name} investment`,
-                },
-              })
-
-              // Notify referrer
-              await createNotification(
-                referrer.id,
-                ...Object.values(Notifs.referralBonus(referralBonus)) as [string, string, 'success', string]
-              )
+              await tx.user.update({ where: { id: referrer.id }, data: { balance: { increment: referralBonus }, totalProfit: { increment: referralBonus } } })
+              await tx.transaction.create({ data: { userId: referrer.id, type: 'REFERRAL_BONUS', status: 'COMPLETED', amount: referralBonus, note: `Referral bonus from ${current.user.fullName}'s ${current.plan.name} investment` } })
+              referral = { id: referrer.id, email: referrer.email, fullName: referrer.fullName, amount: referralBonus }
             }
+          }
+
+          return {
+            user: { id: current.userId, email: current.user.email, fullName: current.user.fullName },
+            planName: current.plan.name,
+            roiDue,
+            totalPaid: nextRoiPaid,
+            expectedProfit: current.expectedProfit,
+            matured: shouldComplete,
+            referral,
           }
         })
 
-        // ── Send user notification ──────────────────────────
-        await createNotification(
-          inv.userId,
-          Notifs.profitCredited(inv.expectedProfit, inv.plan.name).title,
-          Notifs.profitCredited(inv.expectedProfit, inv.plan.name).message,
-          'success',
-          '/dashboard'
-        )
-
+        if (!result) continue
         investmentsDone++
-        totalProfitPaid += inv.expectedProfit
+        totalProfitPaid += result.roiDue
 
-        console.log(
-          `[ROI Engine] ✅ Investment ${inv.id} — User: ${inv.user.email} — Profit: $${inv.expectedProfit.toFixed(2)}`
-        )
-      } catch (invError: any) {
-        const errMsg = `Investment ${inv.id}: ${invError.message}`
-        errors.push(errMsg)
-        console.error(`[ROI Engine] ❌ ${errMsg}`)
+        if (result.roiDue > 0 || result.matured) {
+          const notification = Notifs.dailyRoi(result.roiDue, result.planName, result.matured)
+          await createNotification(result.user.id, notification.title, notification.message, notification.type, notification.link)
+          await sendEmail(result.user.email, dailyRoiEmail(result.user.fullName, result.planName, result.roiDue, result.totalPaid, result.expectedProfit, result.matured)).catch(error => console.error('[ROI email]', error))
+        }
+        if (result.referral) {
+          const referralNotification = Notifs.referralBonus(result.referral.amount)
+          await createNotification(result.referral.id, referralNotification.title, referralNotification.message, referralNotification.type, referralNotification.link)
+          await sendEmail(result.referral.email, referralBonusEmail(result.referral.fullName, result.referral.amount)).catch(error => console.error('[Referral email]', error))
+        }
+      } catch (error: any) {
+        const message = `Investment ${investment.id}: ${error.message}`
+        errors.push(message)
+        console.error('[ROI Engine]', message)
       }
     }
 
-    // ── Log this run ────────────────────────────────────────
-    await prisma.roiProcessingLog.create({
-      data: {
-        investmentsFound: dueInvestments.length,
-        investmentsDone,
-        totalProfitPaid,
-        errors: errors.length > 0 ? errors.join('\n') : null,
-      },
-    })
-
-    const duration = Date.now() - startTime
-    console.log(
-      `[ROI Engine] Run complete in ${duration}ms — ${investmentsDone}/${dueInvestments.length} processed — $${totalProfitPaid.toFixed(2)} paid`
-    )
-
-    return NextResponse.json({
-      success: true,
-      investmentsFound: dueInvestments.length,
-      investmentsDone,
-      totalProfitPaid,
-      durationMs: duration,
-      errors: errors.length > 0 ? errors : undefined,
-    })
+    await prisma.roiProcessingLog.create({ data: { investmentsFound, investmentsDone, totalProfitPaid, errors: errors.length ? errors.join('\n') : null } })
+    return NextResponse.json({ success: true, investmentsFound, investmentsDone, totalProfitPaid, durationMs: Date.now() - startTime, errors: errors.length ? errors : undefined })
   } catch (error: any) {
     console.error('[ROI Engine] Fatal error:', error)
-
-    await prisma.roiProcessingLog.create({
-      data: {
-        investmentsFound: 0,
-        investmentsDone,
-        totalProfitPaid,
-        errors: `Fatal: ${error.message}`,
-      },
-    })
-
-    return NextResponse.json({ error: 'ROI engine failed', detail: error.message }, { status: 500 })
+    await prisma.roiProcessingLog.create({ data: { investmentsFound, investmentsDone, totalProfitPaid, errors: `Fatal: ${error.message}` } })
+    return NextResponse.json({ error: 'ROI engine failed' }, { status: 500 })
   }
 }

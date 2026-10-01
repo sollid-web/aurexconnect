@@ -1,178 +1,94 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { formatCurrency, formatDate, getStatusColor } from '@/lib/utils'
-import { DollarSign, TrendingUp, ArrowUpCircle, ArrowDownCircle, Clock, Copy, CheckCircle } from 'lucide-react'
+import { DollarSign, TrendingUp, ArrowUpCircle, ArrowDownCircle, Clock, Copy, CheckCircle, ShieldCheck, MailCheck, Wallet, Activity, CalendarClock, AlertTriangle } from 'lucide-react'
 import Link from 'next/link'
+import { AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import toast from 'react-hot-toast'
 
-interface UserData {
-  balance: number
-  totalDeposited: number
-  totalProfit: number
-  totalWithdrawn: number
-  referralCode: string
-  investments: any[]
-  transactions: any[]
+interface UserData { balance: number; totalDeposited: number; totalProfit: number; totalWithdrawn: number; referralCode: string; investments: any[]; transactions: any[] }
+interface PortfolioData { summary: any; health: any; performance: any[]; allocation: any[]; nextPayout: { amount: number; at: string; plan: string } | null; recentActivity: any[] }
+
+const COLORS = ['#c9a84c', '#e2e8f0', '#7dd3fc', '#c084fc', '#34d399', '#f59e0b']
+const tooltipStyle = { background: '#12121f', border: '1px solid #2b2b45', borderRadius: 12, color: '#fff' }
+
+function ChartEmpty({ text }: { text: string }) { return <div className="h-64 flex items-center justify-center text-center text-gray-600 text-sm px-8">{text}</div> }
+
+function ActivityIcon({ type }: { type: string }) {
+  if (type === 'PROFIT' || type === 'REFERRAL_BONUS') return <TrendingUp size={16} className="text-green-400" />
+  if (type === 'DEPOSIT') return <ArrowDownCircle size={16} className="text-blue-400" />
+  if (type === 'WITHDRAWAL') return <ArrowUpCircle size={16} className="text-orange-400" />
+  return <Activity size={16} className="text-gray-400" />
 }
 
 export default function DashboardPage() {
   const [data, setData] = useState<UserData | null>(null)
+  const [portfolio, setPortfolio] = useState<PortfolioData | null>(null)
+  const [range, setRange] = useState('30')
   const [loading, setLoading] = useState(true)
   const [copied, setCopied] = useState(false)
 
   useEffect(() => {
-    fetch('/api/user/me')
-      .then(r => r.json())
-      .then(d => { setData(d); setLoading(false) })
-      .catch(() => setLoading(false))
-  }, [])
+    let mounted = true
+    setLoading(true)
+    Promise.all([fetch('/api/user/me').then(r => r.json()), fetch(`/api/user/portfolio?range=${range}`).then(r => r.json())])
+      .then(([user, summary]) => { if (mounted) { setData(user); setPortfolio(summary); setLoading(false) } })
+      .catch(() => { if (mounted) setLoading(false) })
+    return () => { mounted = false }
+  }, [range])
 
   const copyReferral = () => {
     if (!data) return
-    const link = `${window.location.origin}/auth/register?ref=${data.referralCode}`
-    navigator.clipboard.writeText(link)
-    setCopied(true)
-    toast.success('Referral link copied!')
-    setTimeout(() => setCopied(false), 2000)
+    navigator.clipboard.writeText(`${window.location.origin}/auth/register?ref=${data.referralCode}`)
+    setCopied(true); toast.success('Referral link copied!'); setTimeout(() => setCopied(false), 2000)
   }
 
-  if (loading) return (
-    <div className="flex items-center justify-center h-64">
-      <div className="w-10 h-10 rounded-full border-2 border-[#c9a84c] border-t-transparent animate-spin" />
-    </div>
-  )
+  if (loading) return <div className="flex items-center justify-center h-64"><div className="w-10 h-10 rounded-full border-2 border-[#c9a84c] border-t-transparent animate-spin" /></div>
 
+  const summary = portfolio?.summary || {}
+  const health = portfolio?.health || {}
+  const activeInvestments = data?.investments?.filter(i => i.status === 'ACTIVE') || []
+  const healthItems = [
+    { label: 'Email verified', ok: health.emailVerified, href: '/dashboard/profile', icon: MailCheck },
+    { label: 'KYC approved', ok: health.kycStatus === 'APPROVED', href: '/dashboard/kyc', icon: ShieldCheck },
+    { label: 'Account active', ok: health.isActive, href: '/dashboard/profile', icon: Activity },
+  ]
   const stats = [
-    { label: 'Available Balance', value: formatCurrency(data?.balance || 0), icon: DollarSign, color: '#c9a84c', change: 'Available to invest or withdraw' },
-    { label: 'Total Deposited', value: formatCurrency(data?.totalDeposited || 0), icon: ArrowDownCircle, color: '#60a5fa', change: 'All-time deposits' },
-    { label: 'Total Profit', value: formatCurrency(data?.totalProfit || 0), icon: TrendingUp, color: '#34d399', change: 'Earnings from investments' },
-    { label: 'Total Withdrawn', value: formatCurrency(data?.totalWithdrawn || 0), icon: ArrowUpCircle, color: '#f87171', change: 'All-time withdrawals' },
+    { label: 'Available Balance', value: formatCurrency(summary.balance ?? data?.balance ?? 0), icon: DollarSign, color: '#c9a84c', change: 'Available to invest or withdraw' },
+    { label: 'Active Capital', value: formatCurrency(summary.activeCapital || 0), icon: Wallet, color: '#60a5fa', change: `${summary.activeInvestments || 0} active investment(s)` },
+    { label: 'ROI Earned', value: formatCurrency(summary.totalProfit ?? data?.totalProfit ?? 0), icon: TrendingUp, color: '#34d399', change: `${formatCurrency(summary.roiPaidOnActive || 0)} paid on active plans` },
+    { label: 'Total Withdrawn', value: formatCurrency(summary.totalWithdrawn ?? data?.totalWithdrawn ?? 0), icon: ArrowUpCircle, color: '#f87171', change: 'All-time withdrawals' },
   ]
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-black mb-1">Portfolio Overview</h1>
-        <p className="text-gray-500 text-sm">Your real-time investment dashboard</p>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div><h1 className="text-2xl font-black mb-1">Portfolio Overview</h1><p className="text-gray-500 text-sm">A clear view of your balance, active capital, and daily ROI activity.</p></div>
+        {portfolio?.nextPayout && <div className="card-dark px-4 py-3 flex items-center gap-3"><CalendarClock size={18} className="text-[#c9a84c]" /><div><div className="text-[10px] uppercase tracking-wider text-gray-500">Next expected ROI</div><div className="text-sm font-bold text-green-400">+{formatCurrency(portfolio.nextPayout.amount)} · {portfolio.nextPayout.plan}</div></div></div>}
       </div>
 
-      {/* Stats grid */}
-      <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        {stats.map(({ label, value, icon: Icon, color, change }) => (
-          <div key={label} className="card-dark p-5">
-            <div className="flex items-start justify-between mb-4">
-              <div>
-                <p className="text-gray-500 text-xs uppercase tracking-wider mb-1">{label}</p>
-                <p className="text-2xl font-black" style={{color}}>{value}</p>
-              </div>
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{background: `${color}15`}}>
-                <Icon size={20} style={{color}} />
-              </div>
-            </div>
-            <p className="text-gray-600 text-xs">{change}</p>
-          </div>
-        ))}
+      <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4">{stats.map(({ label, value, icon: Icon, color, change }) => <div key={label} className="card-dark p-5"><div className="flex items-start justify-between mb-4"><div><p className="text-gray-500 text-xs uppercase tracking-wider mb-1">{label}</p><p className="text-2xl font-black" style={{ color }}>{value}</p></div><div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: `${color}15` }}><Icon size={20} style={{ color }} /></div></div><p className="text-gray-600 text-xs">{change}</p></div>)}</div>
+
+      <div className="grid sm:grid-cols-3 gap-4">{[
+        { href: '/dashboard/deposit', label: 'Make Deposit', sub: 'Fund your account', icon: ArrowDownCircle, color: '#60a5fa' },
+        { href: '/dashboard/plans', label: 'Invest Now', sub: 'Choose a plan with daily ROI', icon: TrendingUp, color: '#c9a84c' },
+        { href: '/dashboard/withdraw', label: 'Withdraw', sub: 'Cash out earnings', icon: ArrowUpCircle, color: '#34d399' },
+      ].map(({ href, label, sub, icon: Icon, color }) => <Link key={href} href={href} className="card-dark p-5 flex items-center gap-4 hover:border-[#c9a84c]/40 transition-all group hover:-translate-y-0.5"><div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: `${color}15` }}><Icon size={22} style={{ color }} /></div><div><div className="font-bold text-sm group-hover:text-[#c9a84c] transition-colors">{label}</div><div className="text-gray-500 text-xs">{sub}</div></div></Link>)}</div>
+
+      <div className="grid xl:grid-cols-3 gap-6">
+        <div className="card-dark p-6 xl:col-span-2"><div className="flex items-center justify-between mb-5 gap-3 flex-wrap"><div><h2 className="font-bold">ROI performance</h2><p className="text-gray-500 text-xs mt-1">Cumulative ROI and daily credits from recorded transactions.</p></div><div className="flex gap-1">{['7', '30', '90', 'all'].map(option => <button key={option} onClick={() => setRange(option)} className={`px-3 py-1.5 rounded-lg text-xs ${range === option ? 'bg-[#c9a84c] text-[#0a0a14] font-bold' : 'text-gray-500 hover:text-white bg-[#0a0a14]'}`}>{option === 'all' ? 'All' : `${option}d`}</button>)}</div></div>{portfolio?.performance?.length ? <ResponsiveContainer width="100%" height={270}><AreaChart data={portfolio.performance}><defs><linearGradient id="roiFill" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#c9a84c" stopOpacity={0.35} /><stop offset="95%" stopColor="#c9a84c" stopOpacity={0} /></linearGradient></defs><CartesianGrid stroke="#1e1e35" vertical={false} /><XAxis dataKey="label" tick={{ fill: '#6b7280', fontSize: 11 }} tickLine={false} axisLine={false} minTickGap={28} /><YAxis tick={{ fill: '#6b7280', fontSize: 11 }} tickLine={false} axisLine={false} tickFormatter={value => `$${value}`} /><Tooltip contentStyle={tooltipStyle} formatter={(value: number, name: string) => [formatCurrency(value), name === 'cumulativeRoi' ? 'Cumulative ROI' : 'Daily ROI']} /><Area type="monotone" dataKey="cumulativeRoi" stroke="#c9a84c" fill="url(#roiFill)" strokeWidth={2} /></AreaChart></ResponsiveContainer> : <ChartEmpty text="ROI performance will appear here after your first recorded credit." />}</div>
+        <div className="card-dark p-6"><h2 className="font-bold">Capital allocation</h2><p className="text-gray-500 text-xs mt-1 mb-3">Active invested capital by plan.</p>{portfolio?.allocation?.length ? <><ResponsiveContainer width="100%" height={190}><PieChart><Pie data={portfolio.allocation} dataKey="invested" nameKey="name" innerRadius={52} outerRadius={78} paddingAngle={3}>{portfolio.allocation.map((_: any, index: number) => <Cell key={index} fill={COLORS[index % COLORS.length]} />)}</Pie><Tooltip contentStyle={tooltipStyle} formatter={(value: number) => formatCurrency(value)} /></PieChart></ResponsiveContainer><div className="space-y-2">{portfolio.allocation.map((item: any, index: number) => <div key={item.name} className="flex items-center justify-between text-xs"><span className="flex items-center gap-2 text-gray-400"><span className="w-2 h-2 rounded-full" style={{ background: COLORS[index % COLORS.length] }} />{item.name}</span><span className="font-semibold">{formatCurrency(item.invested)}</span></div>)}</div></> : <ChartEmpty text="Your allocation chart will appear after you activate an investment." />}</div>
       </div>
 
-      {/* Quick actions */}
-      <div className="grid sm:grid-cols-3 gap-4">
-        {[
-          { href: '/dashboard/deposit', label: 'Make Deposit', sub: 'Fund your account', icon: ArrowDownCircle, color: '#60a5fa' },
-          { href: '/dashboard/plans', label: 'Invest Now', sub: 'Choose a plan', icon: TrendingUp, color: '#c9a84c' },
-          { href: '/dashboard/withdraw', label: 'Withdraw', sub: 'Cash out earnings', icon: ArrowUpCircle, color: '#34d399' },
-        ].map(({ href, label, sub, icon: Icon, color }) => (
-          <Link key={href} href={href}
-            className="card-dark p-5 flex items-center gap-4 hover:border-[#c9a84c]/40 transition-all group hover:-translate-y-0.5">
-            <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{background:`${color}15`}}>
-              <Icon size={22} style={{color}} />
-            </div>
-            <div>
-              <div className="font-bold text-sm group-hover:text-[#c9a84c] transition-colors">{label}</div>
-              <div className="text-gray-500 text-xs">{sub}</div>
-            </div>
-          </Link>
-        ))}
+      <div className="grid xl:grid-cols-3 gap-6">
+        <div className="card-dark p-6 xl:col-span-2"><h2 className="font-bold mb-1">Daily ROI activity</h2><p className="text-gray-500 text-xs mb-4">Recorded credits and cash movement for the selected period.</p>{portfolio?.performance?.length ? <ResponsiveContainer width="100%" height={220}><BarChart data={portfolio.performance}><CartesianGrid stroke="#1e1e35" vertical={false} /><XAxis dataKey="label" tick={{ fill: '#6b7280', fontSize: 11 }} tickLine={false} axisLine={false} minTickGap={28} /><YAxis tick={{ fill: '#6b7280', fontSize: 11 }} tickLine={false} axisLine={false} tickFormatter={value => `$${value}`} /><Tooltip contentStyle={tooltipStyle} formatter={(value: number, name: string) => [formatCurrency(value), name === 'roi' ? 'ROI' : name === 'deposits' ? 'Deposits' : 'Withdrawals']} /><Bar dataKey="roi" fill="#34d399" radius={[4, 4, 0, 0]} /><Bar dataKey="deposits" fill="#60a5fa" radius={[4, 4, 0, 0]} /><Bar dataKey="withdrawals" fill="#f97316" radius={[4, 4, 0, 0]} /></BarChart></ResponsiveContainer> : <ChartEmpty text="Daily activity will appear after your first account transaction." />}</div>
+        <div className="card-dark p-6"><h2 className="font-bold mb-1">Account health</h2><p className="text-gray-500 text-xs mb-5">Keep these items complete for smoother access.</p><div className="space-y-3">{healthItems.map(({ label, ok, href, icon: Icon }) => <Link key={label} href={href} className="flex items-center gap-3 p-3 rounded-xl bg-[#0a0a14] border border-[#1e1e35] hover:border-[#c9a84c]/30"><Icon size={17} className={ok ? 'text-green-400' : 'text-yellow-400'} /><span className="text-sm flex-1">{label}</span><span className={`text-xs ${ok ? 'text-green-400' : 'text-yellow-400'}`}>{ok ? 'Complete' : 'Review'}</span></Link>)}</div>{health.kycStatus !== 'APPROVED' && <div className="mt-4 p-3 rounded-xl bg-yellow-500/10 border border-yellow-500/20 flex gap-2 text-xs text-yellow-300"><AlertTriangle size={15} className="flex-shrink-0" />Complete KYC to improve withdrawal access.</div>}</div>
       </div>
 
-      <div className="grid lg:grid-cols-2 gap-6">
-        {/* Active Investments */}
-        <div className="card-dark p-6">
-          <div className="flex items-center justify-between mb-5">
-            <h2 className="font-bold">Active Investments</h2>
-            <Link href="/dashboard/plans" className="text-[#c9a84c] text-xs hover:underline">+ New Investment</Link>
-          </div>
-          {data?.investments && data.investments.filter(i => i.status === 'ACTIVE').length > 0 ? (
-            <div className="space-y-3">
-              {data.investments.filter(i => i.status === 'ACTIVE').slice(0, 4).map((inv: any) => (
-                <div key={inv.id} className="flex items-center justify-between p-4 bg-[#0a0a14] rounded-xl border border-[#1e1e35]">
-                  <div>
-                    <div className="font-semibold text-sm">{inv.plan?.name}</div>
-                    <div className="text-gray-500 text-xs flex items-center gap-1 mt-0.5">
-                      <Clock size={11} /> Due {formatDate(inv.endDate)}
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="font-bold text-sm">{formatCurrency(inv.amount)}</div>
-                    <div className="text-green-400 text-xs">+{formatCurrency(inv.expectedProfit)}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-10 text-gray-600">
-              <TrendingUp size={32} className="mx-auto mb-3 opacity-30" />
-              <p className="text-sm">No active investments</p>
-              <Link href="/dashboard/plans" className="text-[#c9a84c] text-xs mt-2 inline-block hover:underline">Start investing →</Link>
-            </div>
-          )}
-        </div>
+      <div className="grid lg:grid-cols-2 gap-6"><div className="card-dark p-6"><div className="flex items-center justify-between mb-5"><h2 className="font-bold">Active Investments</h2><Link href="/dashboard/plans" className="text-[#c9a84c] text-xs hover:underline">+ New Investment</Link></div>{activeInvestments.length ? <div className="space-y-3">{activeInvestments.slice(0, 4).map((inv: any) => <div key={inv.id} className="flex items-center justify-between p-4 bg-[#0a0a14] rounded-xl border border-[#1e1e35]"><div><div className="font-semibold text-sm">{inv.plan?.name}</div><div className="text-gray-500 text-xs flex items-center gap-1 mt-0.5"><Clock size={11} /> Matures {formatDate(inv.endDate)}</div></div><div className="text-right"><div className="font-bold text-sm">{formatCurrency(inv.amount)}</div><div className="text-green-400 text-xs">+{formatCurrency(inv.roiPaid || 0)} ROI paid</div></div></div>)}</div> : <div className="text-center py-10 text-gray-600"><TrendingUp size={32} className="mx-auto mb-3 opacity-30" /><p className="text-sm">No active investments</p><Link href="/dashboard/plans" className="text-[#c9a84c] text-xs mt-2 inline-block hover:underline">Start investing →</Link></div>}</div>
+        <div className="card-dark p-6"><div className="flex items-center justify-between mb-5"><h2 className="font-bold">Recent activity</h2><Link href="/dashboard/transactions" className="text-[#c9a84c] text-xs hover:underline">View all</Link></div>{portfolio?.recentActivity?.length ? <div className="space-y-2">{portfolio.recentActivity.slice(0, 6).map((tx: any) => <div key={tx.id} className="flex items-center gap-3 p-3 bg-[#0a0a14] rounded-xl border border-[#1e1e35]"><div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center"><ActivityIcon type={tx.type} /></div><div className="flex-1 min-w-0"><div className="font-semibold text-sm capitalize truncate">{tx.type.replace(/_/g, ' ')}</div><div className="text-gray-500 text-xs">{formatDate(tx.createdAt)}</div></div><div className="text-right"><div className="font-bold text-sm">{formatCurrency(tx.amount)}</div><span className={`text-[10px] px-2 py-0.5 rounded-full ${getStatusColor(tx.status)}`}>{tx.status}</span></div></div>)}</div> : <div className="text-center py-10 text-gray-600"><p className="text-sm">No activity yet</p></div>}</div></div>
 
-        {/* Recent Transactions */}
-        <div className="card-dark p-6">
-          <div className="flex items-center justify-between mb-5">
-            <h2 className="font-bold">Recent Transactions</h2>
-            <Link href="/dashboard/transactions" className="text-[#c9a84c] text-xs hover:underline">View all</Link>
-          </div>
-          {data?.transactions && data.transactions.length > 0 ? (
-            <div className="space-y-3">
-              {data.transactions.slice(0, 5).map((tx: any) => (
-                <div key={tx.id} className="flex items-center justify-between p-4 bg-[#0a0a14] rounded-xl border border-[#1e1e35]">
-                  <div>
-                    <div className="font-semibold text-sm capitalize">{tx.type.replace(/_/g,' ')}</div>
-                    <div className="text-gray-500 text-xs mt-0.5">{formatDate(tx.createdAt)}</div>
-                  </div>
-                  <div className="text-right">
-                    <div className="font-bold text-sm">{formatCurrency(tx.amount)}</div>
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${getStatusColor(tx.status)}`}>
-                      {tx.status}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-10 text-gray-600">
-              <p className="text-sm">No transactions yet</p>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Referral card */}
-      <div className="card-dark p-6 border-[#c9a84c]/20">
-        <div className="flex items-start justify-between flex-wrap gap-4">
-          <div>
-            <h2 className="font-bold mb-1">Your Referral Program</h2>
-            <p className="text-gray-500 text-sm">Earn up to 15% bonus for every investor you refer</p>
-          </div>
-          <div className="flex items-center gap-3 bg-[#0a0a14] border border-[#1e1e35] rounded-xl px-4 py-3">
-            <code className="text-[#c9a84c] text-sm font-mono">{data?.referralCode}</code>
-            <button onClick={copyReferral} className="text-gray-400 hover:text-[#c9a84c] transition-colors">
-              {copied ? <CheckCircle size={16} className="text-green-400" /> : <Copy size={16} />}
-            </button>
-          </div>
-        </div>
-      </div>
+      <div className="card-dark p-6 border-[#c9a84c]/20"><div className="flex items-start justify-between flex-wrap gap-4"><div><h2 className="font-bold mb-1">Your Referral Program</h2><p className="text-gray-500 text-sm">Earn up to 15% bonus for every investor you refer</p></div><div className="flex items-center gap-3 bg-[#0a0a14] border border-[#1e1e35] rounded-xl px-4 py-3"><code className="text-[#c9a84c] text-sm font-mono">{data?.referralCode}</code><button onClick={copyReferral} className="text-gray-400 hover:text-[#c9a84c] transition-colors">{copied ? <CheckCircle size={16} className="text-green-400" /> : <Copy size={16} />}</button></div></div></div>
     </div>
   )
 }

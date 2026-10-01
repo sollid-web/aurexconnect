@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { createNotification, Notifs } from '@/lib/notifications'
 import { z } from 'zod'
+import { depositSubmittedEmail, sendEmail, withdrawalSubmittedEmail } from '@/lib/email'
 
 const depositSchema = z.object({
   amount: z.number().min(10, 'Minimum deposit is $10'),
@@ -59,6 +60,8 @@ export async function POST(req: NextRequest) {
         '/dashboard/transactions'
       )
 
+      const user = await prisma.user.findUnique({ where: { id: session.user.id }, select: { email: true, fullName: true } })
+      if (user) await sendEmail(user.email, depositSubmittedEmail(user.fullName, amount, currency)).catch(error => console.error('[Deposit email]', error))
       return NextResponse.json({ message: 'Deposit submitted for review', transaction }, { status: 201 })
     }
 
@@ -102,6 +105,7 @@ export async function POST(req: NextRequest) {
         '/dashboard/transactions'
       )
 
+      await sendEmail(user.email, withdrawalSubmittedEmail(user.fullName, amount, currency)).catch(error => console.error('[Withdrawal email]', error))
       return NextResponse.json({ message: 'Withdrawal request submitted', transaction }, { status: 201 })
     }
 

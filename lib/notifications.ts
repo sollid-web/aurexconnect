@@ -76,6 +76,14 @@ export const Notifs = {
     type: 'success' as NotifType,
     link: '/dashboard',
   }),
+  dailyRoi: (amount: number, planName: string, matured: boolean) => ({
+    title: matured ? '✅ Investment Matured' : '💰 Daily ROI Credited',
+    message: matured
+      ? `Your ${planName} investment has matured. ${amount > 0 ? `$${amount.toFixed(2)} final ROI` : 'Final ROI'} and your principal have been credited to your balance.`
+      : `$${amount.toFixed(2)} daily ROI from your ${planName} investment has been credited to your balance.`,
+    type: 'success' as NotifType,
+    link: '/dashboard',
+  }),
   referralBonus: (amount: number) => ({
     title: '🎁 Referral Bonus',
     message: `You earned a $${amount.toFixed(2)} referral bonus! A friend you referred just made an investment.`,

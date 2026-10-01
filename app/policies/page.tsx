@@ -13,7 +13,7 @@ const SECTIONS = [
   },
   {
     title: '3. Investment Plans & Returns',
-    content: `AurexConnect offers four investment plans: Gold (8% ROI/24h), Platinum (15% ROI/3 days), Diamond (25% ROI/7 days), and VIP (50% ROI/14 days). Returns are credited automatically upon maturity. All plans include capital insurance covering the principal invested. Past performance does not guarantee future results. Investment activities carry inherent risk.`,
+    content: `AurexConnect offers four investment plans: Gold (8% ROI/$50–$999/24 hours), Silver (30% ROI/$1,000–$4,999/24 hours), Bronze (60% ROI/$10,000–$49,999/3 days), and Diamond (120% ROI/$100,000+/1 month with no maximum). ROI is credited according to the plan schedule, with longer-duration plans credited in daily installments until maturity. Every plan carries a 5% referral bonus. Past performance does not guarantee future results. Investment activities carry inherent risk.`,
   },
   {
     title: '4. Deposits',
@@ -29,7 +29,7 @@ const SECTIONS = [
   },
   {
     title: '7. Referral Program',
-    content: `The referral program rewards users for introducing new investors. Referral bonuses range from 5% (Gold) to 15% (VIP) of the referred investor's first investment amount. Bonuses are credited automatically upon the referred user's first completed investment. Referral fraud, including self-referral or fabricated accounts, will result in immediate account termination and forfeiture of all bonuses.`,
+    content: `The referral program rewards users for introducing new investors. The referral bonus is 5% for each plan and is credited according to the platform's completed-investment rules. Referral fraud, including self-referral or fabricated accounts, will result in immediate account termination and forfeiture of all bonuses.`,
   },
   {
     title: '8. Capital Insurance Policy',

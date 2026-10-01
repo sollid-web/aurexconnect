@@ -128,7 +128,7 @@ npm run db:seed
 After seeding, you'll have:
 - **Admin:** admin@aurexconnect.com / Admin@123456
 - **Demo User:** demo@aurexconnect.com / User@123456
-- **4 Investment Plans:** Gold, Platinum, Diamond, VIP
+- **4 Investment Plans:** Gold, Silver, Bronze, Diamond
 - **3 Wallet Addresses:** BTC, ETH, USDT
 
 ---
@@ -169,7 +169,7 @@ vercel
 | Table | Purpose |
 |-------|---------|
 | `users` | Investor accounts, balances, referral codes |
-| `plans` | Investment plan definitions (Gold, Platinum, etc.) |
+| `plans` | Investment plan definitions (Gold, Silver, Bronze, Diamond) |
 | `investments` | Active/completed user investments |
 | `transactions` | All financial movements (deposit, withdraw, profit) |
 | `wallet_addresses` | Admin crypto addresses for deposits |

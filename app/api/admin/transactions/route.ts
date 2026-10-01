@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { createNotification, Notifs } from '@/lib/notifications'
+import { depositApprovedEmail, depositRejectedEmail, sendEmail, withdrawalApprovedEmail, withdrawalRejectedEmail } from '@/lib/email'
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions)
@@ -117,6 +118,8 @@ export async function PATCH(req: NextRequest) {
       )
     }
 
+    if (tx.type === 'DEPOSIT') await sendEmail(tx.user.email, depositApprovedEmail(tx.user.fullName, tx.amount, tx.currency)).catch(error => console.error('[Transaction email]', error))
+    if (tx.type === 'WITHDRAWAL') await sendEmail(tx.user.email, withdrawalApprovedEmail(tx.user.fullName, tx.amount, tx.currency)).catch(error => console.error('[Transaction email]', error))
     return NextResponse.json({ message: 'Transaction approved' })
   } else {
     // ── REJECT ─────────────────────────────────────────────
@@ -169,6 +172,8 @@ export async function PATCH(req: NextRequest) {
       )
     }
 
+    if (tx.type === 'DEPOSIT') await sendEmail(tx.user.email, depositRejectedEmail(tx.user.fullName, tx.amount, adminNote)).catch(error => console.error('[Transaction email]', error))
+    if (tx.type === 'WITHDRAWAL') await sendEmail(tx.user.email, withdrawalRejectedEmail(tx.user.fullName, tx.amount, adminNote)).catch(error => console.error('[Transaction email]', error))
     return NextResponse.json({ message: 'Transaction rejected' })
   }
 }

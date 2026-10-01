@@ -7,13 +7,14 @@ import {
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
+import { durationLabel, formatUsd } from '@/lib/plans'
 
 interface Plan {
   id: string
   name: string
   roiPercent: number
   minAmount: number
-  maxAmount: number
+  maxAmount: number | null
   durationDays: number
   referralBonus: number
   features: string[]
@@ -24,6 +25,7 @@ interface Investment {
   id: string
   amount: number
   expectedProfit: number
+  roiPaid?: number
   status: string
   startDate: string
   endDate: string
@@ -33,14 +35,14 @@ interface Investment {
 }
 
 const PLAN_PALETTE: Record<string, { accent: string; glow: string; badge: string }> = {
-  'Basic Plan':     { accent: '#c9a84c', glow: 'rgba(201,168,76,0.12)',   badge: 'bg-[#c9a84c]/15 text-[#c9a84c] border-[#c9a84c]/30' },
-  'Golden Plan': { accent: '#e2e8f0', glow: 'rgba(226,232,240,0.08)',  badge: 'bg-slate-400/15 text-slate-300 border-slate-400/30' },
-  'Mega Plan':  { accent: '#7dd3fc', glow: 'rgba(125,211,252,0.10)',  badge: 'bg-sky-400/15 text-sky-300 border-sky-400/30' },
-  'Premium Plan':      { accent: '#c084fc', glow: 'rgba(192,132,252,0.12)',  badge: 'bg-purple-400/15 text-purple-300 border-purple-400/30' },
+  'Gold Plan': { accent: '#c9a84c', glow: 'rgba(201,168,76,0.12)', badge: 'bg-[#c9a84c]/15 text-[#c9a84c] border-[#c9a84c]/30' },
+  'Silver Plan': { accent: '#cbd5e1', glow: 'rgba(203,213,225,0.08)', badge: 'bg-slate-400/15 text-slate-300 border-slate-400/30' },
+  'Bronze Plan': { accent: '#d7875f', glow: 'rgba(215,135,95,0.10)', badge: 'bg-orange-400/15 text-orange-300 border-orange-400/30' },
+  'Diamond Plan': { accent: '#7dd3fc', glow: 'rgba(125,211,252,0.12)', badge: 'bg-sky-400/15 text-sky-300 border-sky-400/30' },
 }
 
 function getPalette(name: string) {
-  return PLAN_PALETTE[name] ?? PLAN_PALETTE['Basic Plan']
+  return PLAN_PALETTE[name] ?? PLAN_PALETTE['Gold Plan']
 }
 
 // ── Purchase Confirmation Modal ──────────────────────────────────────
@@ -78,7 +80,7 @@ function PurchaseModal({
           <div className="rounded-xl border p-4 space-y-3" style={{ borderColor: `${palette.accent}30`, background: palette.glow }}>
             {[
               ['Investment Amount', formatCurrency(amount), palette.accent],
-              [`Expected Profit (${plan.roiPercent}% ROI)`, `+${formatCurrency(profit)}`, '#34d399'],
+              [`Total Expected ROI (${plan.roiPercent}%)`, `+${formatCurrency(profit)}`, '#34d399'],
               ['Total Return', formatCurrency(total), '#fff'],
               [`Duration`, `${plan.durationDays} day${plan.durationDays > 1 ? 's' : ''}`, '#9ca3af'],
               ['Referral Bonus', `${plan.referralBonus}%`, '#9ca3af'],
@@ -105,7 +107,7 @@ function PurchaseModal({
           )}
 
           <p className="text-gray-500 text-xs leading-relaxed">
-            By confirming, you agree that ${ amount.toFixed(2)} will be deducted from your balance and invested in the {plan.name}. Your principal + profit will be returned automatically when the plan matures.
+            By confirming, you agree that ${ amount.toFixed(2)} will be deducted from your balance and invested in the {plan.name}. Your ROI is credited daily, and your principal is returned when the plan matures.
           </p>
         </div>
 
@@ -165,8 +167,8 @@ function InvestmentCard({ inv }: { inv: Investment }) {
 
       <div className="grid grid-cols-2 gap-3 text-xs">
         <div className="bg-[#0a0a14] rounded-lg p-3">
-          <div className="text-gray-500 mb-0.5">Expected Profit</div>
-          <div className="font-bold text-green-400">+{formatCurrency(inv.expectedProfit)}</div>
+          <div className="text-gray-500 mb-0.5">ROI Paid / Expected</div>
+          <div className="font-bold text-green-400">+{formatCurrency(inv.roiPaid || 0)} / {formatCurrency(inv.expectedProfit)}</div>
         </div>
         <div className="bg-[#0a0a14] rounded-lg p-3">
           <div className="text-gray-500 mb-0.5">{isComplete ? 'Completed' : 'Matures On'}</div>
@@ -217,7 +219,7 @@ export default function PlansPage() {
     if (!selectedPlan) return toast.error('Please select a plan')
     if (!num || isNaN(num)) return toast.error('Enter a valid amount')
     if (num < selectedPlan.minAmount) return toast.error(`Minimum is ${formatCurrency(selectedPlan.minAmount)}`)
-    if (num > selectedPlan.maxAmount) return toast.error(`Maximum is ${formatCurrency(selectedPlan.maxAmount)}`)
+    if (selectedPlan.maxAmount !== null && num > selectedPlan.maxAmount) return toast.error(`Maximum is ${formatCurrency(selectedPlan.maxAmount)}`)
     if (balance < num) return toast.error('Insufficient balance — please deposit first')
     setShowModal(true)
   }
@@ -350,15 +352,15 @@ export default function PlansPage() {
                       {plan.roiPercent}%
                     </div>
                     <div className="text-gray-500 text-xs mt-1.5">
-                      ROI in {plan.durationDays} day{plan.durationDays > 1 ? 's' : ''}
+                      ROI in {durationLabel(plan.durationDays)}
                     </div>
                   </div>
 
                   <ul className="space-y-2.5 flex-1 mb-5">
                     {[
                       `Min: ${formatCurrency(plan.minAmount)}`,
-                      `Max: ${formatCurrency(plan.maxAmount)}`,
-                      `Duration: ${plan.durationDays}d`,
+                      `Max: ${formatUsd(plan.maxAmount)}`,
+                      `Duration: ${durationLabel(plan.durationDays)}`,
                       `Referral: ${plan.referralBonus}%`,
                       `Profit on min: ${formatCurrency(plan.minAmount * plan.roiPercent / 100)}`,
                     ].map(f => (
@@ -395,7 +397,7 @@ export default function PlansPage() {
                 <div>
                   <div className="font-bold">{selectedPlan.name}</div>
                   <div className="text-gray-500 text-xs">
-                    {selectedPlan.roiPercent}% ROI · {selectedPlan.durationDays} day{selectedPlan.durationDays > 1 ? 's' : ''}
+                    {selectedPlan.roiPercent}% ROI · {durationLabel(selectedPlan.durationDays)}
                   </div>
                 </div>
               </div>
@@ -405,7 +407,7 @@ export default function PlansPage() {
                   <div className="flex justify-between text-sm mb-2">
                     <label className="font-medium text-gray-300">Investment Amount (USD)</label>
                     <span className="text-gray-500 text-xs">
-                      {formatCurrency(selectedPlan.minAmount)} – {formatCurrency(selectedPlan.maxAmount)}
+                      {formatUsd(selectedPlan.minAmount)} – {formatUsd(selectedPlan.maxAmount)}
                     </span>
                   </div>
                   <div className="relative">
@@ -414,7 +416,7 @@ export default function PlansPage() {
                       type="number"
                       value={amount}
                       min={selectedPlan.minAmount}
-                      max={selectedPlan.maxAmount}
+                      max={selectedPlan.maxAmount ?? undefined}
                       onChange={e => setAmount(e.target.value)}
                       placeholder={String(selectedPlan.minAmount)}
                       className="w-full bg-[#0a0a14] border border-[#1e1e35] rounded-xl pl-8 pr-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-[#c9a84c] transition-colors"
@@ -423,8 +425,8 @@ export default function PlansPage() {
 
                   {/* Quick amount buttons */}
                   <div className="flex gap-2 mt-2 flex-wrap">
-                    {[selectedPlan.minAmount, selectedPlan.minAmount * 2, selectedPlan.minAmount * 5, selectedPlan.maxAmount].map(v => (
-                      v <= selectedPlan.maxAmount && (
+                    {[selectedPlan.minAmount, selectedPlan.minAmount * 2, selectedPlan.minAmount * 5, selectedPlan.maxAmount].filter((v): v is number => v !== null && (selectedPlan.maxAmount === null || v <= selectedPlan.maxAmount)).map(v => (
+                      (
                         <button key={v} onClick={() => setAmount(String(v))}
                           className={`text-xs px-3 py-1.5 rounded-lg border transition-all ${
                             parseFloat(amount) === v

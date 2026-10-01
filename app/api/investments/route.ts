@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { createNotification } from '@/lib/notifications'
 import { addDays } from 'date-fns'
 import { z } from 'zod'
+import { investmentActivatedEmail, sendEmail } from '@/lib/email'
 
 const investSchema = z.object({
   planId: z.string().min(1, 'Plan is required'),
@@ -29,9 +30,9 @@ export async function POST(req: NextRequest) {
     if (!plan) return NextResponse.json({ error: 'Plan not found' }, { status: 404 })
     if (!plan.isActive) return NextResponse.json({ error: 'This plan is no longer available' }, { status: 400 })
 
-    if (amount < plan.minAmount || amount > plan.maxAmount) {
+    if (amount < plan.minAmount || (plan.maxAmount !== null && amount > plan.maxAmount)) {
       return NextResponse.json(
-        { error: `Amount must be between $${plan.minAmount.toLocaleString()} and $${plan.maxAmount.toLocaleString()}` },
+        { error: `Amount must be at least $${plan.minAmount.toLocaleString()}${plan.maxAmount === null ? '' : ` and no more than $${plan.maxAmount.toLocaleString()}`}` },
         { status: 400 }
       )
     }
@@ -77,10 +78,11 @@ export async function POST(req: NextRequest) {
     await createNotification(
       user.id,
       '🚀 Investment Activated',
-      `Your $${amount.toFixed(2)} investment in the ${plan.name} is now active. You'll earn $${expectedProfit.toFixed(2)} profit in ${plan.durationDays} day(s).`,
+      `Your $${amount.toFixed(2)} investment in the ${plan.name} is now active. Your total ROI of $${expectedProfit.toFixed(2)} will be credited in daily installments over ${plan.durationDays} day(s).`,
       'success',
       '/dashboard'
     )
+    await sendEmail(user.email, investmentActivatedEmail(user.fullName, plan.name, amount, expectedProfit, plan.durationDays)).catch(error => console.error('[Investment email]', error))
 
     return NextResponse.json(
       {

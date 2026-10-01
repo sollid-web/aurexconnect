@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { createNotification } from '@/lib/notifications'
 import { addDays } from 'date-fns'
+import { balanceAdjustmentEmail, investmentActivatedEmail, sendEmail } from '@/lib/email'
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions)
@@ -130,6 +131,7 @@ export async function PATCH(req: NextRequest) {
       '/dashboard'
     )
 
+    await sendEmail(user.email, balanceAdjustmentEmail(user.fullName, amount, 'credited', note)).catch(error => console.error('[Balance email]', error))
     return NextResponse.json({ message: `$${amount} credited to ${user.fullName}`, balance: updated.balance })
   }
 
@@ -169,6 +171,7 @@ export async function PATCH(req: NextRequest) {
       '/dashboard'
     )
 
+    await sendEmail(user.email, balanceAdjustmentEmail(user.fullName, amount, 'debited', note)).catch(error => console.error('[Balance email]', error))
     return NextResponse.json({ message: `$${amount} debited from ${user.fullName}`, balance: updated.balance })
   }
 
@@ -185,9 +188,9 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'Plan not found or inactive' }, { status: 404 })
     }
 
-    if (amount < plan.minAmount || amount > plan.maxAmount) {
+    if (amount < plan.minAmount || (plan.maxAmount !== null && amount > plan.maxAmount)) {
       return NextResponse.json(
-        { error: `Amount must be between $${plan.minAmount} and $${plan.maxAmount} for this plan` },
+        { error: `Amount must be at least $${plan.minAmount}${plan.maxAmount === null ? '' : ` and no more than $${plan.maxAmount}`} for this plan` },
         { status: 400 }
       )
     }
@@ -251,11 +254,12 @@ export async function PATCH(req: NextRequest) {
     await createNotification(
       userId,
       '🚀 Investment Activated',
-      `An investment of $${amount.toFixed(2)} in the ${plan.name} has been activated on your account. Expected profit: $${expectedProfit.toFixed(2)} in ${plan.durationDays} day(s).`,
+      `An investment of $${amount.toFixed(2)} in the ${plan.name} has been activated on your account. Total ROI of $${expectedProfit.toFixed(2)} will be credited in daily installments over ${plan.durationDays} day(s).`,
       'success',
       '/dashboard'
     )
 
+    await sendEmail(user.email, investmentActivatedEmail(user.fullName, plan.name, amount, expectedProfit, plan.durationDays)).catch(error => console.error('[Investment email]', error))
     return NextResponse.json({
       message: `${plan.name} investment of $${amount} assigned to ${user.fullName}`,
       investment,
