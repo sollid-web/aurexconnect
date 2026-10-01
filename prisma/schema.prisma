@@ -138,6 +138,19 @@ model Notification {
   @@map("notifications")
 }
 
+model AdminAuditLog {
+  id           String   @id @default(cuid())
+  adminId      String
+  targetUserId String
+  action       String
+  details      String?
+  createdAt    DateTime @default(now())
+
+  @@index([adminId, createdAt])
+  @@index([targetUserId, createdAt])
+  @@map("admin_audit_logs")
+}
+
 model WalletAddress {
   id        String   @id @default(cuid())
   currency  String   @unique

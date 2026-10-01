@@ -10,7 +10,7 @@ import {
   FileCheck, CheckCircle, XCircle, Eye, Clock,
   TrendingUp, Shield, BarChart3, AlertTriangle, X,
   MinusCircle, Wallet, ListOrdered, ChevronRight,
-  Receipt, ToggleLeft, ToggleRight, Mail
+  Receipt, ToggleLeft, ToggleRight, Mail, UserCog, KeyRound, Save
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -86,6 +86,11 @@ function UserDrawer({ userId, onClose, onRefresh }: { userId: string; onClose: (
   const [investPlanId, setInvestPlanId] = useState('')
   const [investAmount, setInvestAmount] = useState('')
   const [bypassBalance, setBypassBalance] = useState(false)
+  const [profileName, setProfileName] = useState('')
+  const [profileEmail, setProfileEmail] = useState('')
+  const [profilePhone, setProfilePhone] = useState('')
+  const [profileCountry, setProfileCountry] = useState('')
+  const [profileSaving, setProfileSaving] = useState(false)
 
   useEffect(() => {
     Promise.all([
@@ -93,6 +98,10 @@ function UserDrawer({ userId, onClose, onRefresh }: { userId: string; onClose: (
       fetch('/api/plans').then(r => r.json()),
     ]).then(([u, p]) => {
       setUser(u)
+      setProfileName(u.fullName || '')
+      setProfileEmail(u.email || '')
+      setProfilePhone(u.phone || '')
+      setProfileCountry(u.country || '')
       setPlans(Array.isArray(p) ? p : [])
       if (p.length > 0) setInvestPlanId(p[0].id)
       setLoading(false)
@@ -153,6 +162,48 @@ function UserDrawer({ userId, onClose, onRefresh }: { userId: string; onClose: (
       onRefresh()
       toast.success('User status updated')
     }
+  }
+
+  const updateProfile = async () => {
+    if (!profileName.trim() || !profileEmail.trim()) return toast.error('Name and email are required')
+    setProfileSaving(true)
+    try {
+      const res = await fetch('/api/admin/users', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, action: 'updateProfile', fullName: profileName, email: profileEmail, phone: profilePhone || null, country: profileCountry || null }),
+      })
+      const data = await res.json()
+      if (!res.ok) return toast.error(data.error || 'Profile update failed')
+      setUser((current: any) => ({ ...current, ...data.user }))
+      toast.success('User profile updated')
+      onRefresh()
+    } catch { toast.error('Profile update failed') } finally { setProfileSaving(false) }
+  }
+
+  const changeRole = async () => {
+    const role = user?.role === 'ADMIN' ? 'USER' : 'ADMIN'
+    const res = await fetch('/api/admin/users', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, action: 'setRole', role }),
+    })
+    const data = await res.json()
+    if (!res.ok) return toast.error(data.error || 'Role update failed')
+    setUser((current: any) => ({ ...current, ...data.user }))
+    toast.success(data.message)
+    onRefresh()
+  }
+
+  const sendPasswordReset = async () => {
+    const res = await fetch('/api/admin/users', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, action: 'sendPasswordReset' }),
+    })
+    const data = await res.json()
+    if (res.ok) toast.success(data.message)
+    else toast.error(data.error || 'Could not send reset link')
   }
 
   const selectedPlan = plans.find(p => p.id === investPlanId)
@@ -218,6 +269,27 @@ function UserDrawer({ userId, onClose, onRefresh }: { userId: string; onClose: (
                   </div>
                 ))}
               </div>
+            </div>
+
+            {/* Account controls */}
+            <div className="px-6 py-5 border-b border-[#1e1e35] bg-[#12121f]">
+              <div className="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-3 flex items-center gap-2"><UserCog size={13} /> Account Controls</div>
+              <div className="grid sm:grid-cols-2 gap-3">
+                <input value={profileName} onChange={e => setProfileName(e.target.value)} placeholder="Full name"
+                  className="bg-[#0a0a14] border border-[#1e1e35] rounded-xl px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-[#c9a84c]" />
+                <input type="email" value={profileEmail} onChange={e => setProfileEmail(e.target.value)} placeholder="Email address"
+                  className="bg-[#0a0a14] border border-[#1e1e35] rounded-xl px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-[#c9a84c]" />
+                <input value={profilePhone} onChange={e => setProfilePhone(e.target.value)} placeholder="Phone (optional)"
+                  className="bg-[#0a0a14] border border-[#1e1e35] rounded-xl px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-[#c9a84c]" />
+                <input value={profileCountry} onChange={e => setProfileCountry(e.target.value)} placeholder="Country (optional)"
+                  className="bg-[#0a0a14] border border-[#1e1e35] rounded-xl px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-[#c9a84c]" />
+              </div>
+              <div className="flex flex-wrap gap-2 mt-3">
+                <button onClick={updateProfile} disabled={profileSaving} className="flex items-center gap-1.5 rounded-xl bg-[#c9a84c] px-3 py-2 text-xs font-bold text-[#0a0a14] disabled:opacity-50"><Save size={13} /> {profileSaving ? 'Saving...' : 'Save profile'}</button>
+                <button onClick={changeRole} className="flex items-center gap-1.5 rounded-xl border border-purple-400/30 bg-purple-400/10 px-3 py-2 text-xs font-semibold text-purple-300"><Shield size={13} /> {user?.role === 'ADMIN' ? 'Remove admin role' : 'Grant admin role'}</button>
+                <button onClick={sendPasswordReset} className="flex items-center gap-1.5 rounded-xl border border-blue-400/30 bg-blue-400/10 px-3 py-2 text-xs font-semibold text-blue-300"><KeyRound size={13} /> Send reset link</button>
+              </div>
+              <p className="text-[11px] text-gray-600 mt-3">Role changes are audited. Passwords are never shown to administrators; users receive a single-use reset link.</p>
             </div>
 
             {/* Action buttons */}
@@ -433,6 +505,10 @@ function UserDrawer({ userId, onClose, onRefresh }: { userId: string; onClose: (
                   ))}
                 </div>
               )}
+            </div>
+            <div className="px-6 py-5 border-t border-[#1e1e35]">
+              <div className="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-3 flex items-center gap-2"><Shield size={13} /> Admin Audit Trail</div>
+              {user?.adminAuditLogs?.length ? <div className="space-y-2">{user.adminAuditLogs.slice(0, 8).map((log: any) => <div key={log.id} className="flex items-center justify-between gap-3 rounded-lg bg-[#0a0a14] border border-[#1e1e35] px-3 py-2"><div><div className="text-xs font-semibold text-gray-300">{log.action.replace(/_/g, ' ')}</div>{log.details && <div className="text-[11px] text-gray-600 truncate max-w-[210px]">{log.details}</div>}</div><span className="text-[10px] text-gray-600 whitespace-nowrap">{formatDate(log.createdAt)}</span></div>)}</div> : <p className="text-xs text-gray-600">No administrative actions recorded for this account.</p>}
             </div>
           </div>
         )}
@@ -735,6 +811,9 @@ function UsersTab() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [drawerUserId, setDrawerUserId] = useState<string | null>(null)
+  const [createOpen, setCreateOpen] = useState(false)
+  const [createBusy, setCreateBusy] = useState(false)
+  const [newUser, setNewUser] = useState({ fullName: '', email: '', phone: '', country: '', role: 'USER' as 'USER' | 'ADMIN' })
 
   const fetch_ = useCallback(async (q = '') => {
     setLoading(true)
@@ -747,10 +826,39 @@ function UsersTab() {
 
   useEffect(() => { fetch_() }, [fetch_])
 
+  const createUser = async () => {
+    if (!newUser.fullName.trim() || !newUser.email.trim()) return toast.error('Name and email are required')
+    setCreateBusy(true)
+    try {
+      const res = await fetch('/api/admin/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newUser) })
+      const data = await res.json()
+      if (!res.ok) return toast.error(data.error || 'Could not create user')
+      toast.success(data.message)
+      setNewUser({ fullName: '', email: '', phone: '', country: '', role: 'USER' })
+      setCreateOpen(false)
+      fetch_(search)
+    } catch { toast.error('Could not create user') } finally { setCreateBusy(false) }
+  }
+
   const KYC_COLOR: Record<string, string> = { APPROVED: 'text-green-400', PENDING: 'text-yellow-400', REJECTED: 'text-red-400', NONE: 'text-gray-500' }
 
   return (
     <div className="space-y-5">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div><h3 className="font-bold text-xl">User Management</h3><p className="text-gray-500 text-sm mt-1">Manage profiles, roles, access, balances, investments, and account recovery.</p></div>
+        <button onClick={() => setCreateOpen(value => !value)} className="btn-gold text-xs px-4 py-2.5 rounded-xl flex items-center gap-2"><PlusCircle size={14} /> Create user</button>
+      </div>
+      {createOpen && <div className="card-dark p-5 border-[#c9a84c]/20">
+        <div className="flex items-center justify-between mb-4"><div><h4 className="font-bold">Create managed account</h4><p className="text-xs text-gray-500 mt-1">The user receives a single-use link to set their password.</p></div><button onClick={() => setCreateOpen(false)} className="text-gray-500 hover:text-white"><X size={18} /></button></div>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-3">
+          <input value={newUser.fullName} onChange={e => setNewUser(v => ({ ...v, fullName: e.target.value }))} placeholder="Full name" className="bg-[#0a0a14] border border-[#1e1e35] rounded-xl px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-[#c9a84c]" />
+          <input type="email" value={newUser.email} onChange={e => setNewUser(v => ({ ...v, email: e.target.value }))} placeholder="Email address" className="bg-[#0a0a14] border border-[#1e1e35] rounded-xl px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-[#c9a84c]" />
+          <input value={newUser.phone} onChange={e => setNewUser(v => ({ ...v, phone: e.target.value }))} placeholder="Phone (optional)" className="bg-[#0a0a14] border border-[#1e1e35] rounded-xl px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-[#c9a84c]" />
+          <input value={newUser.country} onChange={e => setNewUser(v => ({ ...v, country: e.target.value }))} placeholder="Country (optional)" className="bg-[#0a0a14] border border-[#1e1e35] rounded-xl px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-[#c9a84c]" />
+          <select value={newUser.role} onChange={e => setNewUser(v => ({ ...v, role: e.target.value as 'USER' | 'ADMIN' }))} className="bg-[#0a0a14] border border-[#1e1e35] rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#c9a84c]"><option value="USER">Standard user</option><option value="ADMIN">Administrator</option></select>
+        </div>
+        <button onClick={createUser} disabled={createBusy} className="mt-4 btn-gold px-5 py-2.5 rounded-xl text-sm font-bold disabled:opacity-50">{createBusy ? 'Creating...' : 'Create account and send setup link'}</button>
+      </div>}
       <div className="flex gap-3 flex-wrap">
         <div className="relative flex-1 min-w-[200px]">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />

@@ -14,7 +14,8 @@ export async function GET(req: NextRequest) {
 
   if (!userId) return NextResponse.json({ error: 'userId required' }, { status: 400 })
 
-  const user = await prisma.user.findUnique({
+  const [user, adminAuditLogs] = await Promise.all([
+    prisma.user.findUnique({
     where: { id: userId },
     select: {
       id: true,
@@ -45,9 +46,11 @@ export async function GET(req: NextRequest) {
         take: 1,
       },
     },
-  })
+    }),
+    prisma.adminAuditLog.findMany({ where: { targetUserId: userId }, orderBy: { createdAt: 'desc' }, take: 30 }),
+  ])
 
   if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 })
 
-  return NextResponse.json(user)
+  return NextResponse.json({ ...user, adminAuditLogs })
 }

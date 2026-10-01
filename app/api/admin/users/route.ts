@@ -4,12 +4,56 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { createNotification } from '@/lib/notifications'
 import { addDays } from 'date-fns'
-import { balanceAdjustmentEmail, investmentActivatedEmail, sendEmail } from '@/lib/email'
+import { balanceAdjustmentEmail, investmentActivatedEmail, passwordResetEmail, sendEmail } from '@/lib/email'
+import { createHash, randomBytes } from 'crypto'
+import { z } from 'zod'
+import bcrypt from 'bcryptjs'
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions)
   if (!session || session.user.role !== 'ADMIN') return null
   return session
+}
+
+async function audit(adminId: string, targetUserId: string, action: string, details?: string) {
+  await prisma.adminAuditLog.create({ data: { adminId, targetUserId, action, details } }).catch(error => console.error('[Admin audit]', error))
+}
+
+const profileSchema = z.object({
+  fullName: z.string().trim().min(2).max(120),
+  email: z.string().trim().email().max(160),
+  phone: z.string().trim().max(40).optional().nullable(),
+  country: z.string().trim().max(80).optional().nullable(),
+})
+
+const createUserSchema = profileSchema.extend({ role: z.enum(['USER', 'ADMIN']).default('USER') })
+
+// ── POST — create a managed account ───────────────────────────────────
+export async function POST(req: NextRequest) {
+  const session = await requireAdmin()
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  try {
+    const input = createUserSchema.parse(await req.json())
+    const existing = await prisma.user.findUnique({ where: { email: input.email }, select: { id: true } })
+    if (existing) return NextResponse.json({ error: 'That email address is already in use' }, { status: 409 })
+
+    const rawToken = randomBytes(32).toString('hex')
+    const tokenHash = createHash('sha256').update(rawToken).digest('hex')
+    const temporaryPassword = await bcrypt.hash(randomBytes(24).toString('hex'), 12)
+    const user = await prisma.user.create({
+      data: { ...input, password: temporaryPassword, emailVerified: new Date(), isActive: true },
+      select: { id: true, fullName: true, email: true, role: true },
+    })
+    await prisma.passwordResetToken.create({ data: { userId: user.id, tokenHash, expiresAt: new Date(Date.now() + 60 * 60 * 1000) } })
+    await sendEmail(user.email, passwordResetEmail(user.fullName, rawToken))
+    await audit(session.user.id, user.id, 'CREATE_USER', `${user.email} · ${user.role}`)
+    return NextResponse.json({ message: `User created. A secure password setup link was sent to ${user.email}.`, user }, { status: 201 })
+  } catch (error) {
+    if (error instanceof z.ZodError) return NextResponse.json({ error: error.errors[0].message }, { status: 400 })
+    console.error('[Admin create user]', error)
+    return NextResponse.json({ error: 'Could not create user' }, { status: 500 })
+  }
 }
 
 // ── GET — list users with search + pagination ─────────────────────────
@@ -79,10 +123,13 @@ export async function PATCH(req: NextRequest) {
 
   // ── Toggle active/suspended ─────────────────────────────────────────
   if (action === 'toggleActive') {
+    if (userId === session.user.id) return NextResponse.json({ error: 'You cannot suspend your own admin account' }, { status: 400 })
     const updated = await prisma.user.update({
       where: { id: userId },
       data: { isActive: !user.isActive },
     })
+
+    await audit(session.user.id, userId, updated.isActive ? 'ACTIVATE_USER' : 'SUSPEND_USER')
 
     await createNotification(
       userId,
@@ -95,6 +142,44 @@ export async function PATCH(req: NextRequest) {
     )
 
     return NextResponse.json({ message: `User ${updated.isActive ? 'activated' : 'suspended'}`, user: updated })
+  }
+
+  // ── Update profile fields ───────────────────────────────────────────
+  if (action === 'updateProfile') {
+    let profile: z.infer<typeof profileSchema>
+    try {
+      profile = profileSchema.parse(body)
+    } catch (error) {
+      if (error instanceof z.ZodError) return NextResponse.json({ error: error.errors[0].message }, { status: 400 })
+      throw error
+    }
+    const emailOwner = await prisma.user.findFirst({ where: { email: profile.email, NOT: { id: userId } }, select: { id: true } })
+    if (emailOwner) return NextResponse.json({ error: 'That email address is already in use' }, { status: 409 })
+    const updated = await prisma.user.update({ where: { id: userId }, data: profile })
+    await audit(session.user.id, userId, 'UPDATE_PROFILE', `Updated profile for ${updated.email}`)
+    return NextResponse.json({ message: 'User profile updated', user: updated })
+  }
+
+  // ── Grant or remove administrator role ──────────────────────────────
+  if (action === 'setRole') {
+    if (userId === session.user.id) return NextResponse.json({ error: 'You cannot change your own admin role' }, { status: 400 })
+    if (body.role !== 'ADMIN' && body.role !== 'USER') return NextResponse.json({ error: 'Role must be ADMIN or USER' }, { status: 400 })
+    const updated = await prisma.user.update({ where: { id: userId }, data: { role: body.role } })
+    await audit(session.user.id, userId, body.role === 'ADMIN' ? 'GRANT_ADMIN_ROLE' : 'REMOVE_ADMIN_ROLE')
+    return NextResponse.json({ message: `${updated.fullName} is now ${body.role === 'ADMIN' ? 'an administrator' : 'a standard user'}`, user: updated })
+  }
+
+  // ── Send a single-use password-reset link ────────────────────────────
+  if (action === 'sendPasswordReset') {
+    const rawToken = randomBytes(32).toString('hex')
+    const tokenHash = createHash('sha256').update(rawToken).digest('hex')
+    await prisma.$transaction([
+      prisma.passwordResetToken.deleteMany({ where: { userId } }),
+      prisma.passwordResetToken.create({ data: { userId, tokenHash, expiresAt: new Date(Date.now() + 60 * 60 * 1000) } }),
+    ])
+    await sendEmail(user.email, passwordResetEmail(user.fullName, rawToken))
+    await audit(session.user.id, userId, 'SEND_PASSWORD_RESET')
+    return NextResponse.json({ message: 'Password reset link sent to the user email address' })
   }
 
   // ── Credit balance ──────────────────────────────────────────────────
@@ -131,6 +216,7 @@ export async function PATCH(req: NextRequest) {
       '/dashboard'
     )
 
+    await audit(session.user.id, userId, 'CREDIT_BALANCE', `$${amount.toFixed(2)}${note ? ` — ${note}` : ''}`)
     await sendEmail(user.email, balanceAdjustmentEmail(user.fullName, amount, 'credited', note)).catch(error => console.error('[Balance email]', error))
     return NextResponse.json({ message: `$${amount} credited to ${user.fullName}`, balance: updated.balance })
   }
@@ -171,6 +257,7 @@ export async function PATCH(req: NextRequest) {
       '/dashboard'
     )
 
+    await audit(session.user.id, userId, 'DEBIT_BALANCE', `$${amount.toFixed(2)}${note ? ` — ${note}` : ''}`)
     await sendEmail(user.email, balanceAdjustmentEmail(user.fullName, amount, 'debited', note)).catch(error => console.error('[Balance email]', error))
     return NextResponse.json({ message: `$${amount} debited from ${user.fullName}`, balance: updated.balance })
   }
@@ -250,6 +337,7 @@ export async function PATCH(req: NextRequest) {
 
     const results = await prisma.$transaction(ops)
     const investment = results[0] as any
+    await audit(session.user.id, userId, 'ASSIGN_INVESTMENT', `${plan.name} · $${amount.toFixed(2)}`)
 
     await createNotification(
       userId,
