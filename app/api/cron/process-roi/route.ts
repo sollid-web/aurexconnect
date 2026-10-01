@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { createNotification, Notifs } from '@/lib/notifications'
 import { dailyRoiEmail, referralBonusEmail, sendEmail } from '@/lib/email'
-
-const DAY_MS = 24 * 60 * 60 * 1000
+import { calculateRoiCredit } from '@/lib/roi'
 
 /**
  * Daily ROI engine. Run hourly; each investment is paid only for completed
@@ -40,21 +39,17 @@ export async function GET(req: NextRequest) {
           if (!current || current.status !== 'ACTIVE') return null
 
           const now = new Date()
-          const elapsedInstallments = Math.min(
-            current.plan.durationDays,
-            Math.max(0, Math.floor((now.getTime() - current.startDate.getTime()) / DAY_MS))
-          )
-          const targetPaid = Number(Math.min(
-            current.expectedProfit,
-            (current.expectedProfit / current.plan.durationDays) * elapsedInstallments
-          ).toFixed(2))
-          const roiDue = Number(Math.max(0, targetPaid - current.roiPaid).toFixed(2))
-          const matured = now >= current.endDate
-          if (roiDue <= 0 && !matured) return null
-
-          const nextRoiPaid = Number((current.roiPaid + roiDue).toFixed(2))
-          const shouldComplete = matured && nextRoiPaid >= Number((current.expectedProfit - 0.01).toFixed(2))
-          const creditAmount = Number((roiDue + (shouldComplete ? current.amount : 0)).toFixed(2))
+          const calculation = calculateRoiCredit({
+            now,
+            startDate: current.startDate,
+            endDate: current.endDate,
+            durationDays: current.plan.durationDays,
+            expectedProfit: current.expectedProfit,
+            roiPaid: current.roiPaid,
+            principal: current.amount,
+          })
+          if (!calculation) return null
+          const { roiDue, nextRoiPaid, shouldComplete, creditAmount } = calculation
 
           await tx.investment.update({
             where: { id: current.id },

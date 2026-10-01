@@ -3,15 +3,8 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { customAdminEmail, randomizedCampaignEmail, sendEmail } from '@/lib/email'
+import { adminEmailSchema } from '@/lib/admin-email-schema'
 import { z } from 'zod'
-
-const emailSchema = z.object({
-  audience: z.enum(['all', 'selected']),
-  userIds: z.array(z.string()).max(500).default([]),
-  template: z.enum(['random', 'custom']).default('random'),
-  subject: z.string().trim().min(3).max(160).optional(),
-  message: z.string().trim().min(10).max(5000).optional(),
-})
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions)
@@ -30,7 +23,7 @@ export async function POST(req: NextRequest) {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   try {
-    const input = emailSchema.parse(await req.json())
+    const input = adminEmailSchema.parse(await req.json())
     if (input.audience === 'selected' && input.userIds.length === 0) return NextResponse.json({ error: 'Select at least one user' }, { status: 400 })
     if (input.template === 'custom' && (!input.subject || !input.message)) return NextResponse.json({ error: 'Subject and message are required for a custom email' }, { status: 400 })
 
