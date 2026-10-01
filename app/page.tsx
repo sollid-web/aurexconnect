@@ -5,6 +5,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import PublicHeader from '@/components/layout/PublicHeader'
 import PublicFooter from '@/components/layout/PublicFooter'
+import LiveActivityFeed from '@/components/home/LiveActivityFeed'
 import { INVESTMENT_PLANS, durationLabel, formatUsd } from '@/lib/plans'
 import {
   Shield, TrendingUp, Clock, Users, ChevronRight,
@@ -154,6 +155,8 @@ export default function HomePage() {
           ))}
         </div>
       </section>
+
+      <LiveActivityFeed />
 
       {/* ── ABOUT ───────────────────────────────────────────────── */}
       <section id="about-us" className="py-24 max-w-7xl mx-auto px-6">
