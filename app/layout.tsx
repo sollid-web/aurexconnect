@@ -5,6 +5,7 @@ import { Providers } from './providers'
 import { Toaster } from 'react-hot-toast'
 import Script from 'next/script';
 import CommunityActivityTicker from '@/components/home/CommunityActivityTicker'
+import { Analytics } from '@vercel/analytics/next'
 
 const inter = localFont({
   src: './fonts/Inter-Variable.ttf',
@@ -43,6 +44,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               },
             }}
           />
+          <Analytics />
         </Providers>
       </body>
     </html>
