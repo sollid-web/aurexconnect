@@ -125,14 +125,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="min-h-screen bg-[#0a0a14] flex">
-      <aside className="hidden lg:flex w-64 bg-[#12121f] border-r border-[#1e1e35] flex-col fixed inset-y-0 left-0 z-40">
+      <aside className="glass-panel hidden lg:flex w-64 !rounded-none !border-y-0 !border-l-0 flex-col fixed inset-y-0 left-0 z-40">
         <SidebarContent />
       </aside>
 
       {sidebarOpen && (
         <div className="lg:hidden fixed inset-0 z-50 flex">
           <div className="absolute inset-0 bg-black/60" onClick={() => setSidebarOpen(false)} />
-          <aside className="relative w-72 bg-[#12121f] border-r border-[#1e1e35] flex flex-col z-10">
+          <aside className="glass-panel relative w-72 !rounded-none !border-y-0 !border-l-0 flex flex-col z-10">
             <button onClick={() => setSidebarOpen(false)} className="absolute top-4 right-4 text-gray-400">
               <X size={20} />
             </button>
@@ -142,7 +142,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       )}
 
       <main className="flex-1 lg:ml-64">
-        <div className="sticky top-0 z-30 bg-[#0a0a14]/90 backdrop-blur border-b border-[#1e1e35] px-6 py-4 flex items-center justify-between">
+        <div className="glass-panel sticky top-0 z-30 !rounded-none !border-x-0 !border-t-0 px-6 py-4 flex items-center justify-between">
           <button onClick={() => setSidebarOpen(true)} className="lg:hidden text-gray-400 hover:text-white">
             <Menu size={22} />
           </button>

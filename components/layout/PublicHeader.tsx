@@ -30,7 +30,7 @@ export default function PublicHeader() {
   return (
     <>
       {/* ── Crypto ticker strip ── */}
-      <div className="w-full bg-[#0d0d1a] border-b border-[#1e1e35] overflow-hidden py-2 hidden md:block">
+      <div className="glass-panel w-full !rounded-none !border-x-0 !border-t-0 overflow-hidden py-2 hidden md:block">
         <div className="flex items-center gap-8 animate-marquee whitespace-nowrap px-6 text-xs text-gray-400">
           {[
             { sym: 'BTC', price: '$67,420', change: '+2.4%', up: true },
@@ -59,7 +59,7 @@ export default function PublicHeader() {
       </div>
 
       {/* ── Top contact bar ── */}
-      <div className="hidden md:block bg-[#12121f] border-b border-[#1e1e35] text-xs text-gray-500 py-2 px-6">
+      <div className="glass-panel hidden md:block !rounded-none !border-x-0 !border-t-0 text-xs text-gray-500 py-2 px-6">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-6">
             <span>📍 3536 Badger Pond Lane, Pittsburgh, PA 15212, US</span>
@@ -76,10 +76,8 @@ export default function PublicHeader() {
       </div>
 
       {/* ── Main navigation ── */}
-      <nav className={`sticky top-0 z-50 transition-all duration-300 ${
-        scrolled || pathname !== '/'
-          ? 'bg-[#0a0a14]/98 backdrop-blur border-b border-[#1e1e35] shadow-xl'
-          : 'bg-[#0a0a14]/80 backdrop-blur'
+      <nav className={`glass-panel sticky top-0 z-50 !rounded-none !border-x-0 !border-t-0 transition-all duration-300 ${
+        scrolled || pathname !== '/' ? 'shadow-xl' : ''
       }`}>
         <div className="max-w-7xl mx-auto px-6 flex items-center justify-between h-16">
 
@@ -133,7 +131,7 @@ export default function PublicHeader() {
 
         {/* Mobile menu */}
         {menuOpen && (
-          <div className="lg:hidden bg-[#12121f] border-t border-[#1e1e35] px-6 py-4 space-y-1">
+          <div className="glass-panel lg:hidden !rounded-none !border-x-0 !border-b-0 px-6 py-4 space-y-1">
             {NAV_LINKS.map(({ label, href }) => (
               <Link key={href} href={href}
                 onClick={() => setMenuOpen(false)}
