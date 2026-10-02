@@ -75,7 +75,18 @@ body {
 
 /* Keep the Intercom messenger usable on narrow screens without obscuring the page. */
 @media (max-width: 640px) {
-  #intercom-container .intercom-messenger-frame {
+  #intercom-container {
+    pointer-events: none !important;
+  }
+
+  #intercom-container .intercom-messenger-frame,
+  #intercom-container .intercom-launcher-frame {
+    pointer-events: auto !important;
+  }
+
+  #intercom-container .intercom-messenger-frame,
+  #intercom-container .intercom-messenger-frame > iframe,
+  #intercom-container iframe:not(.intercom-launcher-frame):not(#intercom-frame) {
     top: auto !important;
     right: 12px !important;
     bottom: 76px !important;
@@ -88,7 +99,13 @@ body {
     overflow: hidden !important;
   }
 
-  #intercom-container .intercom-messenger-frame > iframe {
+  #intercom-container .intercom-messenger-frame > iframe,
+  #intercom-container iframe:not(.intercom-launcher-frame):not(#intercom-frame) {
+    position: absolute !important;
+    top: 0 !important;
+    right: 0 !important;
+    bottom: auto !important;
+    left: 0 !important;
     width: 100% !important;
     height: 100% !important;
   }
