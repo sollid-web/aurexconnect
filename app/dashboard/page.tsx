@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import toast from 'react-hot-toast'
 
-interface UserData { email: string; balance: number; totalDeposited: number; totalProfit: number; totalWithdrawn: number; referralCode: string; investments: any[]; transactions: any[] }
+interface UserData { email: string; fullName: string; balance: number; totalDeposited: number; totalProfit: number; totalWithdrawn: number; referralCode: string; investments: any[]; transactions: any[] }
 interface PortfolioData { summary: any; health: any; performance: any[]; allocation: any[]; nextPayout: { amount: number; at: string; plan: string } | null; recentActivity: any[] }
 
 const COLORS = ['#c9a84c', '#e2e8f0', '#7dd3fc', '#c084fc', '#34d399', '#f59e0b']
@@ -48,7 +48,7 @@ export default function DashboardPage() {
   const summary = portfolio?.summary || {}
   const health = portfolio?.health || {}
   const activeInvestments = data?.investments?.filter(i => i.status === 'ACTIVE') || []
-  const firstName = (data?.email?.split('@')[0] || 'Investor').split(/[._-]/)[0]
+  const firstName = data?.fullName?.trim().split(/\s+/)[0] || 'Investor'
   const healthItems = [
     { label: 'Email verified', ok: health.emailVerified, href: '/dashboard/profile', icon: MailCheck },
     { label: 'KYC approved', ok: health.kycStatus === 'APPROVED', href: '/dashboard/kyc', icon: ShieldCheck },
