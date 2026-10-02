@@ -4,9 +4,13 @@ import { createNotification, Notifs } from '@/lib/notifications'
 import { dailyRoiEmail, referralBonusEmail, sendEmail } from '@/lib/email'
 import { calculateRoiCredit } from '@/lib/roi'
 
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
+
 /**
- * Daily ROI engine. Run hourly; each investment is paid only for completed
- * 24-hour installments, so repeated cron calls are idempotent.
+ * Daily ROI engine. Vercel invokes this route once per day. Each investment
+ * is paid only for completed 24-hour installments, so missed runs catch up
+ * safely and repeated calls remain idempotent.
  */
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get('authorization')

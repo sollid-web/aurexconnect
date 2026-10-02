@@ -194,7 +194,6 @@ export async function PATCH(req: NextRequest) {
         where: { id: userId },
         data: {
           balance: { increment: amount },
-          totalProfit: { increment: amount },
         },
       }),
       prisma.transaction.create({
@@ -262,6 +261,47 @@ export async function PATCH(req: NextRequest) {
     await audit(session.user.id, userId, 'DEBIT_BALANCE', `$${amount.toFixed(2)}${note ? ` — ${note}` : ''}`)
     await sendEmail(user.email, balanceAdjustmentEmail(user.fullName, amount, 'debited', note)).catch(error => console.error('[Balance email]', error))
     return NextResponse.json({ message: `$${amount} debited from ${user.fullName}`, balance: updated.balance })
+  }
+
+  // ── Adjust paid profit separately from the cash balance ──────────────
+  if (action === 'adjustProfit') {
+    const amount = Number(body.amount)
+    const direction = body.direction === 'debit' ? 'debit' : body.direction === 'credit' ? 'credit' : null
+    const note = typeof body.note === 'string' ? body.note.trim() : ''
+    if (!direction || !Number.isFinite(amount) || amount <= 0) {
+      return NextResponse.json({ error: 'A valid profit amount and direction are required' }, { status: 400 })
+    }
+    if (direction === 'debit' && user.totalProfit < amount) {
+      return NextResponse.json({ error: `User only has ${user.totalProfit.toFixed(2)} in recorded profit` }, { status: 400 })
+    }
+    if (direction === 'debit' && user.balance < amount) {
+      return NextResponse.json({ error: `User balance is ${user.balance.toFixed(2)} — cannot reverse more than the available balance` }, { status: 400 })
+    }
+
+    const [updated] = await prisma.$transaction([
+      prisma.user.update({
+        where: { id: userId },
+        data: direction === 'credit'
+          ? { totalProfit: { increment: amount }, balance: { increment: amount } }
+          : { totalProfit: { decrement: amount }, balance: { decrement: amount } },
+      }),
+      prisma.transaction.create({
+        data: {
+          userId,
+          type: 'PROFIT',
+          status: 'COMPLETED',
+          amount,
+          note: note || `Admin profit ${direction}`,
+          reviewedBy: session.user.id,
+          reviewedAt: new Date(),
+        },
+      }),
+    ])
+
+    await audit(session.user.id, userId, direction === 'credit' ? 'CREDIT_PROFIT' : 'DEBIT_PROFIT', `$${amount.toFixed(2)}${note ? ` — ${note}` : ''}`)
+    await createNotification(userId, direction === 'credit' ? 'Profit credited' : 'Profit adjusted', `$${amount.toFixed(2)} was ${direction === 'credit' ? 'credited to' : 'removed from'} your recorded profit.`, direction === 'credit' ? 'success' : 'warning', '/dashboard/transactions')
+    await sendEmail(user.email, balanceAdjustmentEmail(user.fullName, amount, direction === 'credit' ? 'credited' : 'debited', note || 'Admin profit adjustment')).catch(error => console.error('[Profit adjustment email]', error))
+    return NextResponse.json({ message: `$${amount.toFixed(2)} profit ${direction}ed for ${user.fullName}`, balance: updated.balance, totalProfit: updated.totalProfit })
   }
 
   // ── Assign investment plan to user (admin-side purchase) ────────────

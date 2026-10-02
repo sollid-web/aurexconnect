@@ -75,12 +75,13 @@ function UserDrawer({ userId, onClose, onRefresh }: { userId: string; onClose: (
   const [user, setUser] = useState<any>(null)
   const [plans, setPlans] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const [activeAction, setActiveAction] = useState<'credit' | 'debit' | 'invest' | null>(null)
+  const [activeAction, setActiveAction] = useState<'credit' | 'debit' | 'profit' | 'invest' | null>(null)
   const [actionLoading, setActionLoading] = useState(false)
 
   // Credit / Debit form
   const [adjAmount, setAdjAmount] = useState('')
   const [adjNote, setAdjNote] = useState('')
+  const [profitDirection, setProfitDirection] = useState<'credit' | 'debit'>('credit')
 
   // Invest form
   const [investPlanId, setInvestPlanId] = useState('')
@@ -120,6 +121,9 @@ function UserDrawer({ userId, onClose, onRefresh }: { userId: string; onClose: (
     } else if (activeAction === 'debit') {
       if (!adjAmount || parseFloat(adjAmount) <= 0) { toast.error('Enter a valid amount'); setActionLoading(false); return }
       body = { userId, action: 'debitBalance', amount: parseFloat(adjAmount), note: adjNote }
+    } else if (activeAction === 'profit') {
+      if (!adjAmount || parseFloat(adjAmount) <= 0) { toast.error('Enter a valid amount'); setActionLoading(false); return }
+      body = { userId, action: 'adjustProfit', amount: parseFloat(adjAmount), direction: profitDirection, note: adjNote }
     } else if (activeAction === 'invest') {
       if (!investPlanId || !investAmount || parseFloat(investAmount) <= 0) { toast.error('Select a plan and enter amount'); setActionLoading(false); return }
       body = { userId, action: 'assignInvestment', planId: investPlanId, amount: parseFloat(investAmount), bypassBalance }
@@ -295,10 +299,11 @@ function UserDrawer({ userId, onClose, onRefresh }: { userId: string; onClose: (
             {/* Action buttons */}
             <div className="px-6 py-5 border-b border-[#1e1e35]">
               <div className="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-3">Admin Actions</div>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 {[
                   { id: 'credit', label: 'Credit Balance', icon: PlusCircle, color: '#34d399', bg: 'bg-green-400/10 border-green-400/20 hover:bg-green-400/15', active: 'bg-green-400/20 border-green-400/40 text-green-400' },
                   { id: 'debit', label: 'Debit Balance', icon: MinusCircle, color: '#f87171', bg: 'bg-red-400/10 border-red-400/20 hover:bg-red-400/15', active: 'bg-red-400/20 border-red-400/40 text-red-400' },
+                  { id: 'profit', label: 'Adjust Profit', icon: TrendingUp, color: '#34d399', bg: 'bg-emerald-400/10 border-emerald-400/20 hover:bg-emerald-400/15', active: 'bg-emerald-400/20 border-emerald-400/40 text-emerald-400' },
                   { id: 'invest', label: 'Assign Plan', icon: TrendingUp, color: '#c9a84c', bg: 'bg-[#c9a84c]/10 border-[#c9a84c]/20 hover:bg-[#c9a84c]/15', active: 'bg-[#c9a84c]/20 border-[#c9a84c]/40 text-[#c9a84c]' },
                 ].map(btn => {
                   const Icon = btn.icon
@@ -356,6 +361,20 @@ function UserDrawer({ userId, onClose, onRefresh }: { userId: string; onClose: (
                         {activeAction === 'credit' ? `Credit $${adjAmount || '0'}` : `Debit $${adjAmount || '0'}`}
                       </button>
                     </div>
+                  </div>
+                )}
+
+                {activeAction === 'profit' && (
+                  <div className="space-y-4">
+                    <h3 className="font-semibold text-sm flex items-center gap-2"><TrendingUp size={15} className="text-emerald-400" />Adjust Recorded Profit <span className="text-gray-500 font-normal">→ {user?.fullName}</span></h3>
+                    <p className="text-xs leading-relaxed text-gray-500">Profit adjustments also update the available balance and create an audited transaction. Use this only for corrections or approved manual rewards.</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <button onClick={() => setProfitDirection('credit')} className={`rounded-xl border px-3 py-2.5 text-sm font-semibold ${profitDirection === 'credit' ? 'border-emerald-400/40 bg-emerald-400/15 text-emerald-300' : 'border-[#1e1e35] text-gray-500'}`}>Credit profit</button>
+                      <button onClick={() => setProfitDirection('debit')} className={`rounded-xl border px-3 py-2.5 text-sm font-semibold ${profitDirection === 'debit' ? 'border-red-400/40 bg-red-400/15 text-red-300' : 'border-[#1e1e35] text-gray-500'}`}>Reverse profit</button>
+                    </div>
+                    <div><label className="block text-xs text-gray-400 mb-1.5">Profit amount (USD) *</label><div className="relative"><span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">$</span><input type="number" min="0.01" value={adjAmount} onChange={e => setAdjAmount(e.target.value)} placeholder="0.00" autoFocus className="w-full bg-[#12121f] border border-[#1e1e35] rounded-xl pl-8 pr-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-[#c9a84c]" /></div></div>
+                    <div><label className="block text-xs text-gray-400 mb-1.5">Reason / Note</label><input type="text" value={adjNote} onChange={e => setAdjNote(e.target.value)} placeholder="e.g. approved correction or bonus" className="w-full bg-[#12121f] border border-[#1e1e35] rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-[#c9a84c]" /></div>
+                    <div className="flex gap-3"><button onClick={() => setActiveAction(null)} className="flex-1 py-2.5 rounded-xl border border-[#1e1e35] text-gray-400 text-sm">Cancel</button><button onClick={doAction} disabled={actionLoading || !adjAmount} className={`flex-1 py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 disabled:opacity-50 ${profitDirection === 'credit' ? 'bg-emerald-500 text-white hover:bg-emerald-400' : 'bg-red-500 text-white hover:bg-red-400'}`}>{actionLoading ? <Loader2 size={14} className="animate-spin" /> : null}{profitDirection === 'credit' ? `Credit $${adjAmount || '0'}` : `Reverse $${adjAmount || '0'}`}</button></div>
                   </div>
                 )}
 
