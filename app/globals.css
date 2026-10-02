@@ -73,6 +73,27 @@ body {
   }
 }
 
+/* Keep the Intercom messenger usable on narrow screens without obscuring the page. */
+@media (max-width: 640px) {
+  #intercom-container .intercom-messenger-frame {
+    top: auto !important;
+    right: 12px !important;
+    bottom: 76px !important;
+    left: auto !important;
+    width: calc(100vw - 24px) !important;
+    max-width: calc(100vw - 24px) !important;
+    height: min(70vh, 620px) !important;
+    max-height: calc(100vh - 104px) !important;
+    border-radius: 18px !important;
+    overflow: hidden !important;
+  }
+
+  #intercom-container .intercom-messenger-frame > iframe {
+    width: 100% !important;
+    height: 100% !important;
+  }
+}
+
 .btn-gold {
   background: linear-gradient(135deg, #c9a84c, #e8cc7a);
   color: #0a0a14;
