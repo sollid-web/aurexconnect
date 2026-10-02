@@ -17,7 +17,7 @@ type ActivityEvent = {
 
 type ActivityResponse = {
   available: boolean
-  source?: 'live' | 'preview'
+  source?: 'live'
   updatedAt?: string
   metrics: { transactionsLast24h: number; volumeLast24h: number; activeInvestments: number } | null
   events: ActivityEvent[]
@@ -41,7 +41,7 @@ export default function LiveActivityFeed() {
         const next = await response.json()
         if (active) setData(next)
       } catch {
-        if (active) setData({ available: false, source: 'preview', metrics: null, events: [] })
+        if (active) setData({ available: false, source: 'live', metrics: null, events: [] })
       }
     }
     load()
@@ -50,7 +50,7 @@ export default function LiveActivityFeed() {
   }, [])
 
   const metrics = data?.metrics
-  const isPreview = data?.source !== 'live'
+  const isLive = data?.available && data.source === 'live'
   return (
     <section className="py-20 bg-[#0d0d19] border-y border-[#1e1e35]">
       <div className="max-w-7xl mx-auto px-6">
@@ -61,14 +61,14 @@ export default function LiveActivityFeed() {
               Network pulse
             </div>
             <h2 className="text-3xl md:text-4xl font-black">Community activity, <span className="gold-text">in motion</span></h2>
-            <p className="text-gray-500 mt-3 max-w-2xl text-sm leading-relaxed">{isPreview ? 'Generic community examples keep the experience lively while the AurexConnect audience grows. Once real activity is available, this panel automatically switches to anonymized completed transactions.' : 'A privacy-safe view of completed platform transactions. Names are anonymized, and activity only appears after a transaction reaches an approved or completed state.'}</p>
+            <p className="text-gray-500 mt-3 max-w-2xl text-sm leading-relaxed">{isLive ? 'A privacy-safe view of completed platform transactions. Names are anonymized, and activity only appears after a transaction reaches an approved or completed state.' : 'Completed platform activity will appear here as verified transactions are recorded.'}</p>
           </div>
           <div className="flex items-center gap-2 text-xs text-gray-500"><Clock3 size={14} /> Updates every 30 seconds</div>
         </div>
 
         <div className="grid sm:grid-cols-3 gap-3 mb-6">
           {[
-            { label: isPreview ? 'Community status' : 'Verified events · 24h', value: metrics ? metrics.transactionsLast24h.toLocaleString() : 'Growing', icon: Activity },
+            { label: 'Verified events · 24h', value: metrics ? metrics.transactionsLast24h.toLocaleString() : '—', icon: Activity },
             { label: 'Recorded volume · 24h', value: metrics ? formatCurrency(metrics.volumeLast24h) : '—', icon: TrendingUp },
             { label: 'Active investments', value: metrics ? metrics.activeInvestments.toLocaleString() : '—', icon: Users },
           ].map(({ label, value, icon: Icon }) => (
@@ -81,8 +81,8 @@ export default function LiveActivityFeed() {
 
         <div className="rounded-2xl border border-[#1e1e35] bg-[#12121f] overflow-hidden">
           <div className="px-5 py-4 border-b border-[#1e1e35] flex items-center justify-between gap-3">
-            <div><h3 className="font-bold">{isPreview ? 'Community activity preview' : 'Recent verified activity'}</h3><p className="text-xs text-gray-500 mt-1">{isPreview ? 'Illustrative examples · not attributed to real users' : 'Last 7 days · anonymized for investor privacy'}</p></div>
-            <div className={`text-[10px] border rounded-full px-2.5 py-1 ${isPreview ? 'text-[#c9a84c] border-[#c9a84c]/20 bg-[#c9a84c]/5' : 'text-emerald-300 border-emerald-400/20 bg-emerald-400/5'}`}>{isPreview ? 'PREVIEW MODE' : 'LIVE DATA'}</div>
+            <div><h3 className="font-bold">Recent verified activity</h3><p className="text-xs text-gray-500 mt-1">Last 7 days · anonymized for investor privacy</p></div>
+            <div className="text-[10px] border rounded-full px-2.5 py-1 text-emerald-300 border-emerald-400/20 bg-emerald-400/5">LIVE DATA</div>
           </div>
           {data?.events?.length ? (
             <div className="divide-y divide-[#1e1e35]">
@@ -90,12 +90,12 @@ export default function LiveActivityFeed() {
                 <div key={event.id} className="px-5 py-4 flex items-center gap-3">
                   <div className="w-9 h-9 rounded-full bg-white/5 flex items-center justify-center flex-shrink-0"><EventIcon type={event.type} /></div>
                   <div className="min-w-0 flex-1"><div className="text-sm text-gray-200 truncate"><span className="font-semibold">{event.name}</span> {event.label}</div><div className="text-xs text-gray-500 mt-1">{event.country ? `${event.country} · ` : ''}{formatDate(event.createdAt)}</div></div>
-                  <div className="text-right flex-shrink-0"><div className="font-bold text-sm text-white">{formatCurrency(event.amount)}</div><div className={`text-[10px] uppercase tracking-wide ${isPreview ? 'text-[#c9a84c]' : 'text-emerald-300'}`}>{isPreview ? 'example' : 'verified'}</div></div>
+                  <div className="text-right flex-shrink-0"><div className="font-bold text-sm text-white">{formatCurrency(event.amount)}</div><div className="text-[10px] uppercase tracking-wide text-emerald-300">verified</div></div>
                 </div>
               ))}
             </div>
           ) : (
-            <div className="px-5 py-12 text-center"><Activity size={28} className="mx-auto mb-3 text-gray-600" /><p className="text-sm text-gray-400">Live activity will appear here as transactions complete.</p><p className="text-xs text-gray-600 mt-2">The preview mode is shown until the community has verified activity.</p></div>
+            <div className="px-5 py-12 text-center"><Activity size={28} className="mx-auto mb-3 text-gray-600" /><p className="text-sm text-gray-400">Verified activity will appear here as transactions complete.</p><p className="text-xs text-gray-600 mt-2">No synthetic or example transactions are displayed.</p></div>
           )}
         </div>
       </div>
