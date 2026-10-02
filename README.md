@@ -126,8 +126,8 @@ npm run db:seed
 ```
 
 After seeding, you'll have:
-- **Admin:** admin@aurexconnect.com / Admin@123456
-- **Demo User:** demo@aurexconnect.com / User@123456
+- **Admin:** admin@aurexconnect.site / Admin@123456
+- **Demo User:** demo@aurexconnect.site / User@123456
 - **4 Investment Plans:** Gold, Silver, Bronze, Diamond
 - **3 Wallet Addresses:** BTC, ETH, USDT
 
@@ -160,7 +160,7 @@ vercel
 1. Push code to GitHub
 2. Go to https://vercel.com → Import Repository
 3. Add environment variables in the dashboard
-4. Change `NEXTAUTH_URL` to your live Vercel URL (e.g. `https://aurexconnect.vercel.app`)
+4. Set `NEXTAUTH_URL` to the production URL: `https://aurexconnect.site`
 
 ---
 
@@ -288,10 +288,10 @@ Add to `vercel.json`:
 
 ## 🌐 Custom Domain (Optional)
 
-1. Buy a domain (e.g. aurexconnect.com from Namecheap)
+1. Buy a domain (e.g. aurexconnect.site from Namecheap)
 2. In Vercel: Project → Settings → Domains → Add domain
 3. Point your DNS nameservers to Vercel
-4. Update `NEXTAUTH_URL` to `https://aurexconnect.com`
+4. Update `NEXTAUTH_URL` to `https://aurexconnect.site`
 
 ---
 

@@ -37,7 +37,7 @@ const SECTIONS = [
   },
   {
     title: '9. Account Security',
-    content: `Users are solely responsible for maintaining the security of their login credentials. AurexConnect will never ask for your password via email or chat. You must immediately notify us at support@aurexconnect.com if you suspect unauthorised access to your account. AurexConnect cannot be held liable for losses resulting from compromised credentials caused by user negligence.`,
+    content: `Users are solely responsible for maintaining the security of their login credentials. AurexConnect will never ask for your password via email or chat. You must immediately notify us at support@aurexconnect.site if you suspect unauthorised access to your account. AurexConnect cannot be held liable for losses resulting from compromised credentials caused by user negligence.`,
   },
   {
     title: '10. Prohibited Activities',
@@ -45,7 +45,7 @@ const SECTIONS = [
   },
   {
     title: '11. Privacy Policy',
-    content: `AurexConnect collects personal data solely for the purpose of operating the platform, fulfilling regulatory requirements, and improving our services. We do not sell personal data to third parties. Data is stored securely using industry-standard encryption. You may request deletion of your account and associated data by contacting support@aurexconnect.com. Regulatory records may be retained for up to 7 years as required by law.`,
+    content: `AurexConnect collects personal data solely for the purpose of operating the platform, fulfilling regulatory requirements, and improving our services. We do not sell personal data to third parties. Data is stored securely using industry-standard encryption. You may request deletion of your account and associated data by contacting support@aurexconnect.site. Regulatory records may be retained for up to 7 years as required by law.`,
   },
   {
     title: '12. Limitation of Liability',
@@ -57,7 +57,7 @@ const SECTIONS = [
   },
   {
     title: '14. Contact',
-    content: `For questions, complaints, or legal notices regarding these policies, please contact: AurexConnect Compliance Team · 3536 Badger Pond Lane, Pittsburgh, PA 15212, United States · support@aurexconnect.com · +44 7876 263 213`,
+    content: `For questions, complaints, or legal notices regarding these policies, please contact: AurexConnect Compliance Team · 3536 Badger Pond Lane, Pittsburgh, PA 15212, United States · support@aurexconnect.site · +44 7876 263 213`,
   },
 ]
 
@@ -96,7 +96,7 @@ export default function PoliciesPage() {
             <Link href="/auth/register" className="btn-gold px-6 py-3 rounded-xl text-sm">
               Create Account
             </Link>
-            <a href="mailto:support@aurexconnect.com"
+            <a href="mailto:support@aurexconnect.site"
               className="px-6 py-3 rounded-xl border border-[#1e1e35] text-gray-300 hover:border-[#c9a84c] text-sm transition-all">
               Contact Support
             </a>

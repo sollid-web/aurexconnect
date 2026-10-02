@@ -87,8 +87,8 @@ export default function PublicFooter() {
             </div>
             <div className="flex items-center gap-2.5">
               <span>✉️</span>
-              <a href="mailto:support@aurexconnect.com" className="hover:text-[#c9a84c] transition-colors">
-                support@aurexconnect.com
+              <a href="mailto:support@aurexconnect.site" className="hover:text-[#c9a84c] transition-colors">
+                support@aurexconnect.site
               </a>
             </div>
             <div className="flex items-center gap-2.5">

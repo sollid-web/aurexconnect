@@ -63,7 +63,7 @@ export default function PublicHeader() {
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-6">
             <span>📍 3536 Badger Pond Lane, Pittsburgh, PA 15212, US</span>
-            <span>✉️ support@aurexconnect.com</span>
+            <span>✉️ support@aurexconnect.site</span>
           </div>
           <div className="flex items-center gap-4">
             <span>📞 +44 7876 263 213</span>

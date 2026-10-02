@@ -1,5 +1,5 @@
 const BRAND = 'AurexConnect'
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'http://localhost:3000'
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://aurexconnect.site'
 
 export type EmailMessage = { subject: string; html: string }
 
@@ -10,7 +10,7 @@ function escapeHtml(value: string | number) {
 function money(value: number) { return `$${value.toFixed(2)}` }
 
 function layout(title: string, body: string, preheader = '') {
-  return `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)}</title></head><body style="margin:0;background:#0a0a14;color:#e5e7eb;font-family:Arial,Helvetica,sans-serif"><span style="display:none;max-height:0;overflow:hidden">${escapeHtml(preheader)}</span><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a14;padding:32px 12px"><tr><td align="center"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#12121f;border:1px solid #2b2b45;border-radius:16px;overflow:hidden"><tr><td style="padding:28px 32px;border-bottom:1px solid #2b2b45"><div style="font-size:24px;font-weight:800;letter-spacing:-.5px"><span style="color:#c9a84c">Aurex</span><span style="color:#fff">Connect</span></div></td></tr><tr><td style="padding:32px">${body}</td></tr><tr><td style="padding:22px 32px;border-top:1px solid #2b2b45;color:#8b8ba3;font-size:12px;line-height:1.6">© ${new Date().getFullYear()} ${BRAND}. This is an automated message. If you need help, contact support@aurexconnect.com.</td></tr></table></td></tr></table></body></html>`
+  return `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)}</title></head><body style="margin:0;background:#0a0a14;color:#e5e7eb;font-family:Arial,Helvetica,sans-serif"><span style="display:none;max-height:0;overflow:hidden">${escapeHtml(preheader)}</span><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a14;padding:32px 12px"><tr><td align="center"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#12121f;border:1px solid #2b2b45;border-radius:16px;overflow:hidden"><tr><td style="padding:28px 32px;border-bottom:1px solid #2b2b45"><div style="font-size:24px;font-weight:800;letter-spacing:-.5px"><span style="color:#c9a84c">Aurex</span><span style="color:#fff">Connect</span></div></td></tr><tr><td style="padding:32px">${body}</td></tr><tr><td style="padding:22px 32px;border-top:1px solid #2b2b45;color:#8b8ba3;font-size:12px;line-height:1.6">© ${new Date().getFullYear()} ${BRAND}. This is an automated message. If you need help, contact support@aurexconnect.site.</td></tr></table></td></tr></table></body></html>`
 }
 
 function button(label: string, href: string) {
@@ -116,7 +116,7 @@ export async function sendEmail(to: string, email: EmailMessage) {
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from: process.env.RESEND_FROM_EMAIL || 'AurexConnect <noreply@aurexconnect.com>', to: [to], subject: email.subject, html: email.html }),
+    body: JSON.stringify({ from: process.env.RESEND_FROM_EMAIL || 'AurexConnect <noreply@aurexconnect.site>', to: [to], subject: email.subject, html: email.html }),
   })
   if (!response.ok) {
     const detail = await response.text()

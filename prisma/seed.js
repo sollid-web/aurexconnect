@@ -25,10 +25,10 @@ async function main() {
   // ── Admin user ──────────────────────────────────────────
   const adminPassword = await bcrypt.hash('Admin@123456', 12)
   const admin = await prisma.user.upsert({
-    where: { email: 'admin@aurexconnect.com' },
+    where: { email: 'admin@aurexconnect.site' },
     update: {},
     create: {
-      email: 'admin@aurexconnect.com',
+      email: 'admin@aurexconnect.site',
       password: adminPassword,
       fullName: 'AurexConnect Admin',
       role: 'ADMIN',
@@ -42,10 +42,10 @@ async function main() {
   // ── Demo investor ───────────────────────────────────────
   const userPassword = await bcrypt.hash('User@123456', 12)
   const demoUser = await prisma.user.upsert({
-    where: { email: 'demo@aurexconnect.com' },
+    where: { email: 'demo@aurexconnect.site' },
     update: {},
     create: {
-      email: 'demo@aurexconnect.com',
+      email: 'demo@aurexconnect.site',
       password: userPassword,
       fullName: 'Demo Investor',
       role: 'USER',
@@ -146,8 +146,8 @@ async function main() {
 
   console.log('\n🎉 Seed complete!\n')
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-  console.log('  Admin:  admin@aurexconnect.com / Admin@123456')
-  console.log('  Demo:   demo@aurexconnect.com  / User@123456')
+  console.log('  Admin:  admin@aurexconnect.site / Admin@123456')
+  console.log('  Demo:   demo@aurexconnect.site  / User@123456')
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
 }
 
