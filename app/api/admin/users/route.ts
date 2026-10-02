@@ -21,7 +21,7 @@ async function audit(adminId: string, targetUserId: string, action: string, deta
 
 const profileSchema = z.object({
   fullName: z.string().trim().min(2).max(120),
-  email: z.string().trim().email().max(160),
+  email: z.string().trim().email().max(160).transform(value => value.toLowerCase()),
   phone: z.string().trim().max(40).optional().nullable(),
   country: z.string().trim().max(80).optional().nullable(),
 })
@@ -62,8 +62,10 @@ export async function GET(req: NextRequest) {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { searchParams } = new URL(req.url)
-  const page = parseInt(searchParams.get('page') || '1')
-  const limit = parseInt(searchParams.get('limit') || '20')
+  const requestedPage = Number.parseInt(searchParams.get('page') || '1', 10)
+  const requestedLimit = Number.parseInt(searchParams.get('limit') || '20', 10)
+  const page = Number.isFinite(requestedPage) ? Math.max(1, requestedPage) : 1
+  const limit = Number.isFinite(requestedLimit) ? Math.min(50, Math.max(1, requestedLimit)) : 20
   const search = searchParams.get('search') || ''
 
   const where = search

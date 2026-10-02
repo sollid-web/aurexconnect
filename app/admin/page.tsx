@@ -810,17 +810,20 @@ function UsersTab() {
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
+  const pageSize = 20
   const [drawerUserId, setDrawerUserId] = useState<string | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
   const [createBusy, setCreateBusy] = useState(false)
   const [newUser, setNewUser] = useState({ fullName: '', email: '', phone: '', country: '', role: 'USER' as 'USER' | 'ADMIN' })
 
-  const fetch_ = useCallback(async (q = '') => {
+  const fetch_ = useCallback(async (q = '', requestedPage = 1) => {
     setLoading(true)
-    const res = await fetch(`/api/admin/users?search=${q}`)
+    const res = await fetch(`/api/admin/users?search=${encodeURIComponent(q)}&page=${requestedPage}&limit=${pageSize}`)
     const data = await res.json()
     setUsers(data.users || [])
     setTotal(data.total || 0)
+    setPage(data.page || requestedPage)
     setLoading(false)
   }, [])
 
@@ -836,7 +839,7 @@ function UsersTab() {
       toast.success(data.message)
       setNewUser({ fullName: '', email: '', phone: '', country: '', role: 'USER' })
       setCreateOpen(false)
-      fetch_(search)
+      fetch_(search, 1)
     } catch { toast.error('Could not create user') } finally { setCreateBusy(false) }
   }
 
@@ -866,10 +869,10 @@ function UsersTab() {
             placeholder="Search by name or email..."
             className="w-full bg-[#12121f] border border-[#1e1e35] rounded-xl pl-9 pr-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-[#c9a84c]" />
         </div>
-        <button onClick={() => fetch_(search)} className="btn-gold text-xs px-5 py-2.5 rounded-xl">Search</button>
+        <button onClick={() => fetch_(search, 1)} className="btn-gold text-xs px-5 py-2.5 rounded-xl">Search</button>
       </div>
       <div className="card-dark overflow-hidden">
-        <div className="px-5 py-4 border-b border-[#1e1e35] text-xs text-gray-500">Showing {users.length} of {total} users</div>
+        <div className="flex items-center justify-between gap-3 border-b border-[#1e1e35] px-5 py-4 text-xs text-gray-500"><span>Showing {total === 0 ? 0 : (page - 1) * pageSize + 1}–{Math.min(page * pageSize, total)} of {total} users</span><span className="hidden sm:inline">Select a user to view activity, edit access, or manage funds.</span></div>
         {loading ? <div className="flex items-center justify-center h-40"><Spinner /></div> : (
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -888,15 +891,17 @@ function UsersTab() {
                     <td className="px-5 py-4">
                       <button onClick={() => setDrawerUserId(u.id)}
                         className="flex items-center gap-1.5 text-xs bg-[#c9a84c]/10 text-[#c9a84c] border border-[#c9a84c]/30 px-3 py-1.5 rounded-lg hover:bg-[#c9a84c]/20 transition-all">
-                        <Wallet size={12} /> Manage
+                        <Eye size={12} /> View & edit
                       </button>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            {users.length === 0 && <div className="px-6 py-14 text-center"><Users size={32} className="mx-auto mb-3 text-gray-600" /><p className="text-sm font-semibold text-gray-300">No users found</p><p className="mt-1 text-xs text-gray-600">Try another name or email search, or create a new account.</p></div>}
           </div>
         )}
+        {!loading && total > 0 && <div className="flex items-center justify-between border-t border-[#1e1e35] px-5 py-4"><button disabled={page <= 1} onClick={() => fetch_(search, page - 1)} className="rounded-lg border border-[#1e1e35] px-3 py-2 text-xs text-gray-400 transition hover:border-[#c9a84c]/40 hover:text-white disabled:cursor-not-allowed disabled:opacity-30">Previous</button><span className="text-xs text-gray-500">Page {page} of {Math.ceil(total / pageSize)}</span><button disabled={page >= Math.ceil(total / pageSize)} onClick={() => fetch_(search, page + 1)} className="rounded-lg border border-[#1e1e35] px-3 py-2 text-xs text-gray-400 transition hover:border-[#c9a84c]/40 hover:text-white disabled:cursor-not-allowed disabled:opacity-30">Next</button></div>}
       </div>
       {drawerUserId && (
         <UserDrawer userId={drawerUserId} onClose={() => setDrawerUserId(null)} onRefresh={() => fetch_(search)} />
