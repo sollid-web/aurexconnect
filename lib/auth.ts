@@ -42,6 +42,7 @@ export const authOptions: NextAuthOptions = {
           email: user.email,
           name: user.fullName,
           role: user.role,
+          createdAt: Math.floor(user.createdAt.getTime() / 1000),
         }
       },
     }),
@@ -51,6 +52,7 @@ export const authOptions: NextAuthOptions = {
       if (user) {
         token.id = user.id
         token.role = (user as any).role
+        token.createdAt = (user as any).createdAt
       }
       return token
     },
@@ -58,6 +60,7 @@ export const authOptions: NextAuthOptions = {
       if (token) {
         session.user.id = token.id as string
         session.user.role = token.role as string
+        session.user.createdAt = token.createdAt as number
       }
       return session
     },
