@@ -8,6 +8,9 @@
   --dark: #0a0a14;
   --dark-card: #12121f;
   --dark-border: #1e1e35;
+  --glass-surface: rgba(18, 18, 31, 0.78);
+  --glass-border: rgba(232, 204, 122, 0.18);
+  --glass-highlight: rgba(255, 255, 255, 0.09);
 }
 
 * { box-sizing: border-box; padding: 0; margin: 0; }
@@ -38,6 +41,36 @@ body {
   background: var(--dark-card);
   border: 1px solid var(--dark-border);
   border-radius: 12px;
+}
+
+/*
+ * Brand glass surface
+ *
+ * The opaque background is intentionally declared first so browsers without
+ * backdrop-filter support still receive a legible, accessible panel. Modern
+ * browsers progressively enhance it with a subtle dark-gold glass treatment.
+ */
+.glass-panel {
+  background: var(--dark-card);
+  border: 1px solid var(--dark-border);
+  border-radius: 12px;
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    0 12px 32px rgba(0, 0, 0, 0.22);
+}
+
+@supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  .glass-panel {
+    background: linear-gradient(
+      135deg,
+      rgba(232, 204, 122, 0.08),
+      var(--glass-surface) 42%,
+      rgba(10, 10, 20, 0.72)
+    );
+    border-color: var(--glass-border);
+    -webkit-backdrop-filter: blur(16px) saturate(125%);
+    backdrop-filter: blur(16px) saturate(125%);
+  }
 }
 
 .btn-gold {
