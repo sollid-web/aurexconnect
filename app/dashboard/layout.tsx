@@ -29,6 +29,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   useEffect(() => {
     if (status === 'unauthenticated') router.push('/auth/login')
+    if (status === 'authenticated' && session?.user?.role === 'ADMIN') router.replace('/admin')
   }, [status, router])
 
   // Poll for unread notifications every 60 seconds
@@ -46,7 +47,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return () => clearInterval(interval)
   }, [status])
 
-  if (status === 'loading') {
+  if (status === 'loading' || (status === 'authenticated' && session?.user?.role === 'ADMIN')) {
     return (
       <div className="min-h-screen bg-[#0a0a14] flex items-center justify-center">
         <div className="w-10 h-10 rounded-full border-2 border-[#c9a84c] border-t-transparent animate-spin" />

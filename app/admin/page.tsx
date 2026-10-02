@@ -1094,9 +1094,9 @@ export default function AdminPage() {
       <div className="border-b border-[#1e1e35] bg-[#12121f] px-8 py-5 flex items-center justify-between flex-wrap gap-4">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-lg bg-purple-500/20 border border-purple-500/30 flex items-center justify-center"><Shield size={18} className="text-purple-400" /></div>
-          <div><div className="text-purple-400 text-xs font-semibold uppercase tracking-widest">Admin Panel</div><h1 className="text-xl font-black">AurexConnect Administration</h1></div>
+          <div><div className="text-purple-400 text-xs font-semibold uppercase tracking-widest">Admin dashboard</div><h1 className="text-xl font-black">AurexConnect Operations</h1></div>
         </div>
-        <a href="/dashboard" className="text-sm text-gray-400 hover:text-white border border-[#1e1e35] px-4 py-2 rounded-xl hover:border-[#c9a84c]/40 transition-all">← Dashboard</a>
+        <a href="/" className="text-sm text-gray-400 hover:text-white border border-[#1e1e35] px-4 py-2 rounded-xl hover:border-[#c9a84c]/40 transition-all">View public site</a>
       </div>
 
       <div className="border-b border-[#1e1e35] bg-[#12121f] px-8 overflow-x-auto">
