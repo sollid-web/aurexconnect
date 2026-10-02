@@ -60,6 +60,10 @@ export const authOptions: NextAuthOptions = {
       if (token) {
         session.user.id = token.id as string
         session.user.role = token.role as string
+        if (!token.createdAt && token.id) {
+          const existingUser = await prisma.user.findUnique({ where: { id: token.id as string }, select: { createdAt: true } })
+          token.createdAt = existingUser ? Math.floor(existingUser.createdAt.getTime() / 1000) : 0
+        }
         session.user.createdAt = token.createdAt as number
       }
       return session
