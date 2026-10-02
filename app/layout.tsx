@@ -3,7 +3,6 @@ import localFont from 'next/font/local'
 import './globals.css'
 import { Providers } from './providers'
 import { Toaster } from 'react-hot-toast'
-import CryptoTicker from './components/CryptoTicker' 
 import Script from 'next/script';
 import CommunityActivityTicker from '@/components/home/CommunityActivityTicker'
 
@@ -17,7 +16,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <body className={inter.className}>
         <Providers>
-          <CryptoTicker />
           <CommunityActivityTicker />
           {children}
 
