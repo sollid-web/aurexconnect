@@ -1,5 +1,5 @@
 const BRAND = 'AurexConnect'
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://aurexconnect.site'
+const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://www.aurexconnect.site').replace(/\/$/, '')
 
 export type EmailMessage = { subject: string; html: string }
 

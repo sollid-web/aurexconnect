@@ -19,7 +19,7 @@ export async function GET() {
     withdrawalStats,
     profitStats,
   ] = await Promise.all([
-    prisma.user.count({ where: { role: 'USER' } }),
+    prisma.user.count(),
     prisma.transaction.count({ where: { type: 'DEPOSIT', status: 'PENDING' } }),
     prisma.transaction.count({ where: { type: 'WITHDRAWAL', status: 'PENDING' } }),
     prisma.kycSubmission.count({ where: { status: 'PENDING' } }),

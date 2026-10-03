@@ -160,7 +160,7 @@ vercel
 1. Push code to GitHub
 2. Go to https://vercel.com → Import Repository
 3. Add environment variables in the dashboard
-4. Set `NEXTAUTH_URL` to the production URL: `https://aurexconnect.site`
+4. Set `NEXTAUTH_URL` to the canonical production URL: `https://www.aurexconnect.site`
 
 ---
 
@@ -291,7 +291,7 @@ Add to `vercel.json`:
 1. Buy a domain (e.g. aurexconnect.site from Namecheap)
 2. In Vercel: Project → Settings → Domains → Add domain
 3. Point your DNS nameservers to Vercel
-4. Update `NEXTAUTH_URL` to `https://aurexconnect.site`
+4. Update `NEXTAUTH_URL` to `https://www.aurexconnect.site`
 
 ---
 
