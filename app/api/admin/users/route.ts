@@ -8,15 +8,16 @@ import { balanceAdjustmentEmail, investmentActivatedEmail, passwordResetEmail, s
 import { createHash, randomBytes } from 'crypto'
 import { z } from 'zod'
 import bcrypt from 'bcryptjs'
+import { userListQuerySchema } from '@/lib/admin-query-schema'
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions)
-  if (!session || session.user.role !== 'ADMIN') return null
+  if (!session || session.user.role !== 'ADMIN' || !session.user.isActive) return null
   return session
 }
 
 async function audit(adminId: string, targetUserId: string, action: string, details?: string) {
-  await prisma.adminAuditLog.create({ data: { adminId, targetUserId, action, details } }).catch(error => console.error('[Admin audit]', error))
+  await prisma.adminAuditLog.create({ data: { adminId, targetUserId, action, details } })
 }
 
 const profileSchema = z.object({
@@ -46,8 +47,8 @@ export async function POST(req: NextRequest) {
       select: { id: true, fullName: true, email: true, role: true },
     })
     await prisma.passwordResetToken.create({ data: { userId: user.id, tokenHash, expiresAt: new Date(Date.now() + 60 * 60 * 1000) } })
-    await sendEmail(user.email, passwordResetEmail(user.fullName, rawToken))
     await audit(session.user.id, user.id, 'CREATE_USER', `${user.email} · ${user.role}`)
+    await sendEmail(user.email, passwordResetEmail(user.fullName, rawToken))
     return NextResponse.json({ message: `User created. A secure password setup link was sent to ${user.email}.`, user }, { status: 201 })
   } catch (error) {
     if (error instanceof z.ZodError) return NextResponse.json({ error: error.errors[0].message }, { status: 400 })
@@ -61,12 +62,10 @@ export async function GET(req: NextRequest) {
   const session = await requireAdmin()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { searchParams } = new URL(req.url)
-  const requestedPage = Number.parseInt(searchParams.get('page') || '1', 10)
-  const requestedLimit = Number.parseInt(searchParams.get('limit') || '20', 10)
-  const page = Number.isFinite(requestedPage) ? Math.max(1, requestedPage) : 1
-  const limit = Number.isFinite(requestedLimit) ? Math.min(50, Math.max(1, requestedLimit)) : 20
-  const search = searchParams.get('search') || ''
+  const searchParams = new URL(req.url).searchParams
+  const parsedQuery = userListQuerySchema.safeParse(Object.fromEntries(searchParams.entries()))
+  if (!parsedQuery.success) return NextResponse.json({ error: 'Invalid page, limit, or search query parameter' }, { status: 400 })
+  const { page, limit, search } = parsedQuery.data
 
   const where = search
     ? {
@@ -179,8 +178,8 @@ export async function PATCH(req: NextRequest) {
       prisma.passwordResetToken.deleteMany({ where: { userId } }),
       prisma.passwordResetToken.create({ data: { userId, tokenHash, expiresAt: new Date(Date.now() + 60 * 60 * 1000) } }),
     ])
-    await sendEmail(user.email, passwordResetEmail(user.fullName, rawToken))
     await audit(session.user.id, userId, 'SEND_PASSWORD_RESET')
+    await sendEmail(user.email, passwordResetEmail(user.fullName, rawToken))
     return NextResponse.json({ message: 'Password reset link sent to the user email address' })
   }
 
@@ -207,6 +206,7 @@ export async function PATCH(req: NextRequest) {
           reviewedAt: new Date(),
         },
       }),
+      prisma.adminAuditLog.create({ data: { adminId: session.user.id, targetUserId: userId, action: 'CREDIT_BALANCE', details: `$${amount.toFixed(2)}${note ? ` — ${note}` : ''}` } }),
     ])
 
     await createNotification(
@@ -217,7 +217,6 @@ export async function PATCH(req: NextRequest) {
       '/dashboard'
     )
 
-    await audit(session.user.id, userId, 'CREDIT_BALANCE', `$${amount.toFixed(2)}${note ? ` — ${note}` : ''}`)
     await sendEmail(user.email, balanceAdjustmentEmail(user.fullName, amount, 'credited', note)).catch(error => console.error('[Balance email]', error))
     return NextResponse.json({ message: `$${amount} credited to ${user.fullName}`, balance: updated.balance })
   }
@@ -248,6 +247,7 @@ export async function PATCH(req: NextRequest) {
           reviewedAt: new Date(),
         },
       }),
+      prisma.adminAuditLog.create({ data: { adminId: session.user.id, targetUserId: userId, action: 'DEBIT_BALANCE', details: `$${amount.toFixed(2)}${note ? ` — ${note}` : ''}` } }),
     ])
 
     await createNotification(
@@ -258,7 +258,6 @@ export async function PATCH(req: NextRequest) {
       '/dashboard'
     )
 
-    await audit(session.user.id, userId, 'DEBIT_BALANCE', `$${amount.toFixed(2)}${note ? ` — ${note}` : ''}`)
     await sendEmail(user.email, balanceAdjustmentEmail(user.fullName, amount, 'debited', note)).catch(error => console.error('[Balance email]', error))
     return NextResponse.json({ message: `$${amount} debited from ${user.fullName}`, balance: updated.balance })
   }
@@ -296,9 +295,16 @@ export async function PATCH(req: NextRequest) {
           reviewedAt: new Date(),
         },
       }),
+      prisma.adminAuditLog.create({
+        data: {
+          adminId: session.user.id,
+          targetUserId: userId,
+          action: direction === 'credit' ? 'CREDIT_PROFIT' : 'DEBIT_PROFIT',
+          details: `$${amount.toFixed(2)}${note ? ` — ${note}` : ''}`,
+        },
+      }),
     ])
 
-    await audit(session.user.id, userId, direction === 'credit' ? 'CREDIT_PROFIT' : 'DEBIT_PROFIT', `$${amount.toFixed(2)}${note ? ` — ${note}` : ''}`)
     await createNotification(userId, direction === 'credit' ? 'Profit credited' : 'Profit adjusted', `$${amount.toFixed(2)} was ${direction === 'credit' ? 'credited to' : 'removed from'} your recorded profit.`, direction === 'credit' ? 'success' : 'warning', '/dashboard/transactions')
     await sendEmail(user.email, balanceAdjustmentEmail(user.fullName, amount, direction === 'credit' ? 'credited' : 'debited', note || 'Admin profit adjustment')).catch(error => console.error('[Profit adjustment email]', error))
     return NextResponse.json({ message: `$${amount.toFixed(2)} profit ${direction}ed for ${user.fullName}`, balance: updated.balance, totalProfit: updated.totalProfit })
@@ -308,7 +314,7 @@ export async function PATCH(req: NextRequest) {
   if (action === 'assignInvestment') {
     const { planId, amount, bypassBalance } = body
 
-    if (!planId || !amount || amount <= 0) {
+    if (typeof planId !== 'string' || !planId || typeof amount !== 'number' || !Number.isFinite(amount) || amount <= 0 || typeof bypassBalance !== 'boolean') {
       return NextResponse.json({ error: 'planId and amount are required' }, { status: 400 })
     }
 
@@ -324,8 +330,6 @@ export async function PATCH(req: NextRequest) {
       )
     }
 
-    // bypassBalance = admin can assign without user having enough balance
-    // (admin is manually assigning, funds may have been deposited externally)
     if (!bypassBalance && user.balance < amount) {
       return NextResponse.json(
         { error: `User balance ($${user.balance.toFixed(2)}) is insufficient. Enable "bypass balance check" to proceed anyway.` },
@@ -336,51 +340,43 @@ export async function PATCH(req: NextRequest) {
     const expectedProfit = (amount * plan.roiPercent) / 100
     const endDate = addDays(new Date(), plan.durationDays)
 
-    const ops: any[] = [
-      prisma.investment.create({
-        data: {
-          userId,
-          planId: plan.id,
-          amount,
-          expectedProfit,
-          endDate,
-        },
-      }),
-      prisma.transaction.create({
-        data: {
-          userId,
-          type: 'DEPOSIT',
-          status: 'COMPLETED',
-          amount,
-          note: `Admin-assigned investment — ${plan.name}`,
-          reviewedBy: session.user.id,
-          reviewedAt: new Date(),
-        },
-      }),
-    ]
-
-    // Only deduct balance if not bypassing AND user has enough
-    if (!bypassBalance) {
-      ops.push(
-        prisma.user.update({
-          where: { id: userId },
-          data: { balance: { decrement: amount } },
+    // Existing balance-funded allocations consume already-counted deposits.
+    // Bypass is reserved for externally funded capital and records an approved
+    // deposit. Both variants update the investment and accounting in one DB tx.
+    const investment = await prisma.$transaction(async db => {
+      if (bypassBalance) {
+        await db.user.update({ where: { id: userId }, data: { totalDeposited: { increment: amount } } })
+        await db.transaction.create({
+          data: {
+            userId,
+            type: 'DEPOSIT',
+            status: 'APPROVED',
+            amount,
+            note: `Externally funded admin investment — ${plan.name}`,
+            reviewedBy: session.user.id,
+            reviewedAt: new Date(),
+          },
         })
-      )
-    } else {
-      // Bypass: we still update totalDeposited for accounting
-      ops.push(
-        prisma.user.update({
-          where: { id: userId },
-          data: { totalDeposited: { increment: amount } },
-        })
-      )
-    }
+      } else {
+        const debited = await db.user.updateMany({ where: { id: userId, balance: { gte: amount } }, data: { balance: { decrement: amount } } })
+        if (debited.count !== 1) throw new Error('INSUFFICIENT_BALANCE')
+      }
 
-    const results = await prisma.$transaction(ops)
-    const investment = results[0] as any
-    await audit(session.user.id, userId, 'ASSIGN_INVESTMENT', `${plan.name} · $${amount.toFixed(2)}`)
-
+      const created = await db.investment.create({ data: { userId, planId: plan.id, amount, expectedProfit, endDate } })
+      await db.adminAuditLog.create({
+        data: {
+          adminId: session.user.id,
+          targetUserId: userId,
+          action: 'ASSIGN_INVESTMENT',
+          details: `${plan.name} · $${amount.toFixed(2)} · funding=${bypassBalance ? 'external deposit' : 'existing balance'}`,
+        },
+      })
+      return created
+    }).catch(error => {
+      if (error instanceof Error && error.message === 'INSUFFICIENT_BALANCE') return null
+      throw error
+    })
+    if (!investment) return NextResponse.json({ error: 'User balance changed and is now insufficient for this investment' }, { status: 409 })
     await createNotification(
       userId,
       '🚀 Investment Activated',

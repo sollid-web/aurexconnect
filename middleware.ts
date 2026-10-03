@@ -5,7 +5,9 @@ export default withAuth({
   callbacks: {
     authorized: ({ token, req }) => {
       if (!token) return false
-      if (req.nextUrl.pathname.startsWith('/admin')) return token.role === 'ADMIN'
+      // Middleware only verifies that a session exists. Role/active checks are
+      // revalidated against the database by NextAuth session materialization
+      // and every admin API, rather than trusting stale JWT role claims here.
       return true
     },
   },
