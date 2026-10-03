@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
-import { useSession } from 'next-auth/react'
+import { signOut, useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { formatCurrency, formatDate, getStatusColor } from '@/lib/utils'
 import { durationLabel, formatUsd } from '@/lib/plans'
@@ -10,11 +10,11 @@ import {
   FileCheck, CheckCircle, XCircle, Eye, Clock,
   TrendingUp, Shield, BarChart3, AlertTriangle, X,
   MinusCircle, Wallet, ListOrdered, ChevronRight,
-  Receipt, ToggleLeft, ToggleRight, Mail, UserCog, KeyRound, Save
+  Receipt, ToggleLeft, ToggleRight, Mail, UserCog, KeyRound, Save, Settings, LogOut
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
-type Tab = 'overview' | 'deposits' | 'withdrawals' | 'kyc' | 'users' | 'roi' | 'email'
+type Tab = 'overview' | 'deposits' | 'withdrawals' | 'kyc' | 'users' | 'roi' | 'email' | 'settings'
 
 // ─────────────────────────────────────────────────────────────────────
 // Shared helpers
@@ -1077,6 +1077,134 @@ function EmailTab() {
 }
 
 // ─────────────────────────────────────────────────────────────────────
+// Admin Settings — deposit methods and receiving addresses
+// ─────────────────────────────────────────────────────────────────────
+type PaymentMethod = { id: string; currency: string; label: string; address: string; network: string; isActive: boolean }
+type PaymentMethodForm = { currency: string; label: string; address: string; network: string }
+const emptyPaymentMethod: PaymentMethodForm = { currency: '', label: '', address: '', network: '' }
+
+function SettingsTab() {
+  const [methods, setMethods] = useState<PaymentMethod[]>([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [form, setForm] = useState<PaymentMethodForm>(emptyPaymentMethod)
+
+  const loadMethods = useCallback(async () => {
+    setLoading(true)
+    try {
+      const response = await adminFetch('/api/admin/wallet-addresses')
+      const data = await response.json()
+      setMethods(response.ok && Array.isArray(data.methods) ? data.methods : [])
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { void loadMethods() }, [loadMethods])
+
+  const resetForm = () => {
+    setEditingId(null)
+    setForm(emptyPaymentMethod)
+  }
+
+  const saveMethod = async (event: React.FormEvent) => {
+    event.preventDefault()
+    const currentMethod = editingId ? methods.find(method => method.id === editingId) : undefined
+    if (currentMethod && (currentMethod.address !== form.address || currentMethod.network !== form.network)) {
+      const confirmed = window.confirm('You are changing the deposit address or network shown to customers. Verify the new details carefully; incorrect deposit instructions can cause customers to lose funds. Continue?')
+      if (!confirmed) return
+    }
+    setSaving(true)
+    try {
+      const response = await adminFetch('/api/admin/wallet-addresses', {
+        method: editingId ? 'PATCH' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editingId ? { id: editingId, ...form } : form),
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        toast.error(data.error || 'Could not save payment method')
+        return
+      }
+      toast.success(editingId ? 'Payment method updated' : 'Payment method added')
+      resetForm()
+      await loadMethods()
+    } catch {
+      toast.error('Could not save payment method')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const editMethod = (method: PaymentMethod) => {
+    setEditingId(method.id)
+    setForm({ currency: method.currency, label: method.label, address: method.address, network: method.network })
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  const toggleMethod = async (method: PaymentMethod) => {
+    try {
+      const response = await adminFetch('/api/admin/wallet-addresses', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: method.id, isActive: !method.isActive }),
+      })
+      const data = await response.json()
+      if (!response.ok) return toast.error(data.error || 'Could not change payment method status')
+      toast.success(data.method.isActive ? 'Payment method is now visible to users' : 'Payment method is hidden from new deposits')
+      await loadMethods()
+    } catch {
+      toast.error('Could not change payment method status')
+    }
+  }
+
+  const fieldClass = 'w-full bg-[#0a0a14] border border-[#1e1e35] rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-[#c9a84c]'
+
+  return (
+    <div className="space-y-6 max-w-6xl">
+      <div>
+        <h2 className="text-xl font-bold">Website Settings</h2>
+        <p className="text-gray-500 text-sm mt-1">Manage the payment methods and deposit addresses displayed to customers. Only active methods appear on the deposit page; changes apply to new deposit submissions.</p>
+      </div>
+
+      <div className="grid xl:grid-cols-[minmax(320px,0.8fr)_1.2fr] gap-5 items-start">
+        <form onSubmit={saveMethod} className="card-dark p-6 space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <div><h3 className="font-bold">{editingId ? 'Edit payment method' : 'Add payment method'}</h3><p className="text-xs text-gray-500 mt-1">Use a unique code such as BTC or USDT-TRC20.</p></div>
+            {editingId && <button type="button" onClick={resetForm} className="text-xs text-gray-400 hover:text-white">Cancel</button>}
+          </div>
+          <label className="block"><span className="block text-xs text-gray-400 mb-2">Method code</span><input required maxLength={20} value={form.currency} onChange={event => setForm(current => ({ ...current, currency: event.target.value.toUpperCase() }))} placeholder="e.g. BTC or USDT-TRC20" className={fieldClass} /></label>
+          <label className="block"><span className="block text-xs text-gray-400 mb-2">Display name</span><input required maxLength={80} value={form.label} onChange={event => setForm(current => ({ ...current, label: event.target.value }))} placeholder="e.g. Tether (TRC20)" className={fieldClass} /></label>
+          <label className="block"><span className="block text-xs text-gray-400 mb-2">Network</span><input required maxLength={64} value={form.network} onChange={event => setForm(current => ({ ...current, network: event.target.value }))} placeholder="e.g. Bitcoin, Ethereum, TRC20" className={fieldClass} /></label>
+          <label className="block"><span className="block text-xs text-gray-400 mb-2">Deposit address</span><textarea required minLength={8} maxLength={300} rows={3} value={form.address} onChange={event => setForm(current => ({ ...current, address: event.target.value }))} placeholder="Enter the address users should send funds to" className={`${fieldClass} resize-y font-mono`} /></label>
+          <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/5 p-3 text-xs leading-relaxed text-yellow-200">Double-check the address and network before saving. An incorrect address may cause customer funds to be lost. Deactivate a method to hide it from new deposits without deleting it.</div>
+          <button type="submit" disabled={saving} className="btn-gold w-full py-3 rounded-xl flex items-center justify-center gap-2 disabled:opacity-50">
+            {saving ? <Loader2 size={15} className="animate-spin" /> : editingId ? <Save size={15} /> : <PlusCircle size={15} />}
+            {saving ? 'Saving…' : editingId ? 'Save changes' : 'Add payment method'}
+          </button>
+        </form>
+
+        <div className="card-dark overflow-hidden">
+          <div className="p-5 border-b border-[#1e1e35] flex items-center justify-between gap-3"><div><h3 className="font-bold">Payment methods</h3><p className="text-gray-500 text-xs mt-1">{methods.filter(method => method.isActive).length} active · {methods.length} total</p></div><button type="button" onClick={() => void loadMethods()} className="text-xs text-[#c9a84c] hover:underline">Refresh</button></div>
+          {loading ? <div className="h-40 flex items-center justify-center"><Spinner /></div> : methods.length === 0 ? <div className="p-10 text-center"><Wallet size={30} className="mx-auto mb-3 text-gray-600" /><p className="text-sm text-gray-300">No payment methods configured</p><p className="text-xs text-gray-500 mt-1">Add a method to make it available on the user deposit page.</p></div> : <div className="divide-y divide-[#1e1e35]">
+            {methods.map(method => (
+              <div key={method.id} className="p-5 space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0"><div className="flex items-center gap-2 flex-wrap"><h4 className="font-semibold">{method.label}</h4><code className="rounded bg-[#0a0a14] px-2 py-0.5 text-[11px] text-[#c9a84c]">{method.currency}</code><span className={`text-[10px] px-2 py-0.5 rounded-full ${method.isActive ? 'bg-green-400/10 text-green-400' : 'bg-gray-400/10 text-gray-400'}`}>{method.isActive ? 'Active' : 'Hidden'}</span></div><p className="text-xs text-gray-500 mt-1">Network: {method.network}</p></div>
+                  <div className="flex shrink-0 items-center gap-2"><button type="button" onClick={() => editMethod(method)} className="rounded-lg border border-[#1e1e35] px-3 py-2 text-xs text-gray-300 hover:text-white">Edit</button><button type="button" onClick={() => void toggleMethod(method)} className={`rounded-lg border px-3 py-2 text-xs ${method.isActive ? 'border-red-500/30 text-red-300 hover:bg-red-400/10' : 'border-green-500/30 text-green-300 hover:bg-green-400/10'}`}>{method.isActive ? 'Deactivate' : 'Activate'}</button></div>
+                </div>
+                <div className="rounded-lg bg-[#0a0a14] border border-[#1e1e35] px-3 py-2"><span className="block text-[10px] uppercase tracking-wider text-gray-600 mb-1">Address</span><code className="block break-all text-xs text-gray-300">{method.address}</code></div>
+              </div>
+            ))}
+          </div>}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────
 // Overview Tab
 // ─────────────────────────────────────────────────────────────────────
 function OverviewTab() {
@@ -1144,6 +1272,7 @@ export default function AdminPage() {
     { id: 'users', label: 'Users', icon: Users },
     { id: 'roi', label: 'ROI Engine', icon: TrendingUp },
     { id: 'email', label: 'Email Center', icon: Mail },
+    { id: 'settings', label: 'Settings', icon: Settings },
   ] as const
 
   return (
@@ -1153,7 +1282,12 @@ export default function AdminPage() {
           <div className="w-9 h-9 rounded-lg bg-purple-500/20 border border-purple-500/30 flex items-center justify-center"><Shield size={18} className="text-purple-400" /></div>
           <div><div className="text-purple-400 text-xs font-semibold uppercase tracking-widest">Admin dashboard</div><h1 className="text-xl font-black">AurexConnect Operations</h1></div>
         </div>
-        <a href="/" className="text-sm text-gray-400 hover:text-white border border-[#1e1e35] px-4 py-2 rounded-xl hover:border-[#c9a84c]/40 transition-all">View public site</a>
+        <div className="flex items-center gap-2">
+          <a href="/" className="text-sm text-gray-400 hover:text-white border border-[#1e1e35] px-4 py-2 rounded-xl hover:border-[#c9a84c]/40 transition-all">View public site</a>
+          <button onClick={() => signOut({ callbackUrl: '/auth/login' })} className="flex items-center gap-2 text-sm text-gray-400 hover:text-white border border-[#1e1e35] px-4 py-2 rounded-xl hover:border-red-400/40 hover:text-red-300 transition-all" aria-label="Log out of admin dashboard">
+            <LogOut size={15} /> Log out
+          </button>
+        </div>
       </div>
 
       <div className="border-b border-[#1e1e35] bg-[#12121f] px-8 overflow-x-auto">
@@ -1175,6 +1309,7 @@ export default function AdminPage() {
         {activeTab === 'users' && <UsersTab />}
         {activeTab === 'roi' && <RoiTab />}
         {activeTab === 'email' && <EmailTab />}
+        {activeTab === 'settings' && <SettingsTab />}
       </div>
     </div>
   )

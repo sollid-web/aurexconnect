@@ -8,7 +8,9 @@ import { depositSubmittedEmail, sendEmail, withdrawalSubmittedEmail } from '@/li
 
 const depositSchema = z.object({
   amount: z.number().min(10, 'Minimum deposit is $10'),
-  currency: z.string().default('BTC'),
+  currency: z.string().trim().min(2).max(20),
+  paymentMethodId: z.string().min(1).max(128),
+  paymentMethodUpdatedAt: z.string().datetime({ offset: true }),
   txHash: z.string().min(5, 'Transaction hash is required'),
   proofImageUrl: z.string().url().optional(),
 })
@@ -30,7 +32,13 @@ export async function POST(req: NextRequest) {
 
     // ── DEPOSIT ─────────────────────────────────────────────
     if (type === 'DEPOSIT') {
-      const { amount, currency, txHash, proofImageUrl } = depositSchema.parse(body)
+      const { amount, currency, paymentMethodId, paymentMethodUpdatedAt, txHash, proofImageUrl } = depositSchema.parse(body)
+
+      const paymentMethod = await prisma.walletAddress.findFirst({ where: { id: paymentMethodId, currency, isActive: true }, select: { id: true, updatedAt: true } })
+      if (!paymentMethod) return NextResponse.json({ error: 'This payment method is no longer available. Reload the deposit page and choose an active method.' }, { status: 400 })
+      if (paymentMethod.updatedAt.getTime() !== new Date(paymentMethodUpdatedAt).getTime()) {
+        return NextResponse.json({ error: 'This payment method changed after you opened the page. Reload it and verify the current deposit address before submitting.' }, { status: 409 })
+      }
 
       // Check for duplicate txHash
       const existing = await prisma.transaction.findFirst({ where: { txHash } })
