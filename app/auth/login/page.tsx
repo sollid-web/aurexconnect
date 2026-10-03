@@ -124,13 +124,6 @@ export default function LoginPage() {
             Don't have an account?{' '}
             <Link href="/auth/register" className="text-[#c9a84c] hover:underline font-medium">Create one</Link>
           </p>
-
-          {/* Demo credentials hint */}
-          <div className="mt-8 p-4 bg-[#12121f] border border-[#1e1e35] rounded-xl text-xs text-gray-500">
-            <div className="font-semibold text-gray-400 mb-1">Demo Credentials</div>
-            <div>User: demo@aurexconnect.site / User@123456</div>
-            <div>Admin: admin@aurexconnect.site / Admin@123456</div>
-          </div>
         </div>
       </div>
     </div>
