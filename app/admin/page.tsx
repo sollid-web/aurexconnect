@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
-import { useSession } from 'next-auth/react'
+import { signOut, useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { formatCurrency, formatDate, getStatusColor } from '@/lib/utils'
 import { durationLabel, formatUsd } from '@/lib/plans'
@@ -10,11 +10,11 @@ import {
   FileCheck, CheckCircle, XCircle, Eye, Clock,
   TrendingUp, Shield, BarChart3, AlertTriangle, X,
   MinusCircle, Wallet, ListOrdered, ChevronRight,
-  Receipt, ToggleLeft, ToggleRight, Mail, UserCog, KeyRound, Save
+  Receipt, ToggleLeft, ToggleRight, Mail, UserCog, KeyRound, Save, Settings, LogOut
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
-type Tab = 'overview' | 'deposits' | 'withdrawals' | 'kyc' | 'users' | 'roi' | 'email'
+type Tab = 'overview' | 'deposits' | 'withdrawals' | 'kyc' | 'users' | 'roi' | 'email' | 'settings'
 
 // ─────────────────────────────────────────────────────────────────────
 // Shared helpers
@@ -26,6 +26,25 @@ function StatusBadge({ status }: { status: string }) {
       {status}
     </span>
   )
+}
+
+async function adminFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  try {
+    const response = await window.fetch(input, init)
+    if (response.status === 401) {
+      toast.error('Your admin session expired or access was revoked. Please sign in again.')
+      const callbackUrl = `${window.location.pathname}${window.location.search}`
+      window.location.assign(`/auth/login?callbackUrl=${encodeURIComponent(callbackUrl)}`)
+    } else if (!response.ok) {
+      let message = `Request failed (${response.status})`
+      try { message = (await response.clone().json()).error || message } catch {}
+      toast.error(message)
+    }
+    return response
+  } catch {
+    toast.error('Unable to reach the server. Check your connection and try again.')
+    return new Response(JSON.stringify({ error: 'Network request failed' }), { status: 503, headers: { 'Content-Type': 'application/json' } })
+  }
 }
 
 function Spinner() {
@@ -95,8 +114,8 @@ function UserDrawer({ userId, onClose, onRefresh }: { userId: string; onClose: (
 
   useEffect(() => {
     Promise.all([
-      fetch(`/api/admin/users/detail?userId=${userId}`).then(r => r.json()),
-      fetch('/api/plans').then(r => r.json()),
+      adminFetch(`/api/admin/users/detail?userId=${userId}`).then(r => r.json()),
+      adminFetch('/api/plans').then(r => r.json()),
     ]).then(([u, p]) => {
       setUser(u)
       setProfileName(u.fullName || '')
@@ -130,7 +149,7 @@ function UserDrawer({ userId, onClose, onRefresh }: { userId: string; onClose: (
     }
 
     try {
-      const res = await fetch('/api/admin/users', {
+      const res = await adminFetch('/api/admin/users', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -143,7 +162,7 @@ function UserDrawer({ userId, onClose, onRefresh }: { userId: string; onClose: (
         setActiveAction(null)
         setAdjAmount(''); setAdjNote(''); setInvestAmount('')
         // Refresh user data
-        const updated = await fetch(`/api/admin/users/detail?userId=${userId}`).then(r => r.json())
+        const updated = await adminFetch(`/api/admin/users/detail?userId=${userId}`).then(r => r.json())
         setUser(updated)
         onRefresh()
       }
@@ -155,13 +174,13 @@ function UserDrawer({ userId, onClose, onRefresh }: { userId: string; onClose: (
   }
 
   const toggleActive = async () => {
-    const res = await fetch('/api/admin/users', {
+    const res = await adminFetch('/api/admin/users', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId, action: 'toggleActive' }),
     })
     if (res.ok) {
-      const updated = await fetch(`/api/admin/users/detail?userId=${userId}`).then(r => r.json())
+      const updated = await adminFetch(`/api/admin/users/detail?userId=${userId}`).then(r => r.json())
       setUser(updated)
       onRefresh()
       toast.success('User status updated')
@@ -172,7 +191,7 @@ function UserDrawer({ userId, onClose, onRefresh }: { userId: string; onClose: (
     if (!profileName.trim() || !profileEmail.trim()) return toast.error('Name and email are required')
     setProfileSaving(true)
     try {
-      const res = await fetch('/api/admin/users', {
+      const res = await adminFetch('/api/admin/users', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId, action: 'updateProfile', fullName: profileName, email: profileEmail, phone: profilePhone || null, country: profileCountry || null }),
@@ -187,7 +206,7 @@ function UserDrawer({ userId, onClose, onRefresh }: { userId: string; onClose: (
 
   const changeRole = async () => {
     const role = user?.role === 'ADMIN' ? 'USER' : 'ADMIN'
-    const res = await fetch('/api/admin/users', {
+    const res = await adminFetch('/api/admin/users', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId, action: 'setRole', role }),
@@ -200,7 +219,7 @@ function UserDrawer({ userId, onClose, onRefresh }: { userId: string; onClose: (
   }
 
   const sendPasswordReset = async () => {
-    const res = await fetch('/api/admin/users', {
+    const res = await adminFetch('/api/admin/users', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId, action: 'sendPasswordReset' }),
@@ -548,7 +567,7 @@ function DepositsTab() {
 
   const fetch_ = useCallback(async () => {
     setLoading(true)
-    const res = await fetch(`/api/admin/transactions?type=DEPOSIT&status=${filter}`)
+    const res = await adminFetch(`/api/admin/transactions?type=DEPOSIT&status=${filter}`)
     const data = await res.json()
     setDeposits(data.transactions || [])
     setLoading(false)
@@ -558,7 +577,7 @@ function DepositsTab() {
 
   const handleReview = async (action: 'approve' | 'reject', note: string) => {
     setActionLoading(true)
-    const res = await fetch('/api/admin/transactions', {
+    const res = await adminFetch('/api/admin/transactions', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ transactionId: reviewing.id, action, adminNote: note }),
@@ -636,7 +655,7 @@ function WithdrawalsTab() {
 
   const fetch_ = useCallback(async () => {
     setLoading(true)
-    const res = await fetch(`/api/admin/transactions?type=WITHDRAWAL&status=${filter}`)
+    const res = await adminFetch(`/api/admin/transactions?type=WITHDRAWAL&status=${filter}`)
     const data = await res.json()
     setWithdrawals(data.transactions || [])
     setLoading(false)
@@ -646,7 +665,7 @@ function WithdrawalsTab() {
 
   const handleReview = async (action: 'approve' | 'reject', note: string) => {
     setActionLoading(true)
-    const res = await fetch('/api/admin/transactions', {
+    const res = await adminFetch('/api/admin/transactions', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ transactionId: reviewing.id, action, adminNote: note }),
@@ -728,7 +747,7 @@ function KycTab() {
 
   const fetch_ = useCallback(async () => {
     setLoading(true)
-    const res = await fetch(`/api/admin/kyc?status=${filter}`)
+    const res = await adminFetch(`/api/admin/kyc?status=${filter}`)
     const data = await res.json()
     setSubmissions(data.submissions || [])
     setLoading(false)
@@ -740,7 +759,7 @@ function KycTab() {
     if (!reviewing) { setSignedFiles({}); return }
     const paths = [reviewing.frontImageUrl, reviewing.backImageUrl, reviewing.selfieUrl].filter(Boolean)
     Promise.all(paths.map(async (path: string) => {
-      const response = await fetch(`/api/admin/kyc/file?path=${encodeURIComponent(path)}`)
+      const response = await adminFetch(`/api/admin/kyc/file?path=${encodeURIComponent(path)}`)
       const data = await response.json()
       return [path, data.url] as const
     })).then(entries => setSignedFiles(Object.fromEntries(entries.filter(([, url]) => url))))
@@ -748,7 +767,7 @@ function KycTab() {
 
   const handleReview = async (action: 'approve' | 'reject', note: string) => {
     setActionLoading(true)
-    const res = await fetch('/api/admin/kyc', {
+    const res = await adminFetch('/api/admin/kyc', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ submissionId: reviewing.id, action, adminNote: note }),
@@ -838,7 +857,7 @@ function UsersTab() {
 
   const fetch_ = useCallback(async (q = '', requestedPage = 1) => {
     setLoading(true)
-    const res = await fetch(`/api/admin/users?search=${encodeURIComponent(q)}&page=${requestedPage}&limit=${pageSize}`)
+    const res = await adminFetch(`/api/admin/users?search=${encodeURIComponent(q)}&page=${requestedPage}&limit=${pageSize}`)
     const data = await res.json()
     setUsers(data.users || [])
     setTotal(data.total || 0)
@@ -852,7 +871,7 @@ function UsersTab() {
     if (!newUser.fullName.trim() || !newUser.email.trim()) return toast.error('Name and email are required')
     setCreateBusy(true)
     try {
-      const res = await fetch('/api/admin/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newUser) })
+      const res = await adminFetch('/api/admin/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newUser) })
       const data = await res.json()
       if (!res.ok) return toast.error(data.error || 'Could not create user')
       toast.success(data.message)
@@ -938,15 +957,15 @@ function RoiTab() {
   const [triggering, setTriggering] = useState(false)
 
   useEffect(() => {
-    fetch('/api/admin/roi-logs').then(r => r.json()).then(d => { setLogs(d.logs || []); setLoading(false) })
+    adminFetch('/api/admin/roi-logs').then(r => r.json()).then(d => { setLogs(d.logs || []); setLoading(false) })
   }, [])
 
   const triggerManual = async () => {
     setTriggering(true)
     try {
-      const res = await fetch('/api/cron/process-roi', { headers: { Authorization: `Bearer ${process.env.NEXT_PUBLIC_CRON_SECRET || 'dev-trigger'}` } })
+      const res = await adminFetch('/api/admin/roi/run', { method: 'POST' })
       const data = await res.json()
-      if (res.ok) toast.success(`ROI run: ${data.investmentsDone} processed · $${data.totalProfitPaid?.toFixed(2)} paid`)
+      if (res.ok) { toast.success(`ROI run: ${data.investmentsDone} processed · $${data.totalProfitPaid?.toFixed(2)} paid`); adminFetch('/api/admin/roi-logs').then(r => r.json()).then(d => setLogs(d.logs || [])) }
       else toast.error('ROI trigger failed — check server logs')
     } catch { toast.error('Failed to trigger ROI engine') }
     setTriggering(false)
@@ -999,23 +1018,37 @@ function EmailTab() {
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
+  const [recipientLimit, setRecipientLimit] = useState(500)
 
   useEffect(() => {
-    fetch('/api/admin/email').then(response => response.json()).then(data => {
+    adminFetch('/api/admin/email').then(response => response.json()).then(data => {
       setUsers(data.users || [])
+      setRecipientLimit(data.recipientLimit || 500)
       setLoading(false)
     }).catch(() => setLoading(false))
   }, [])
 
-  const toggleUser = (id: string) => setSelected(current => current.includes(id) ? current.filter(item => item !== id) : [...current, id])
-  const selectAll = () => setSelected(selected.length === users.length ? [] : users.map(user => user.id))
+  const toggleUser = (id: string) => setSelected(current => {
+    if (current.includes(id)) return current.filter(item => item !== id)
+    if (current.length >= recipientLimit) {
+      toast.error(`Campaigns are capped at ${recipientLimit} recipients.`)
+      return current
+    }
+    return [...current, id]
+  })
+  const selectAll = () => {
+    if (selected.length === users.length) return setSelected([])
+    const eligible = users.slice(0, recipientLimit).map(user => user.id)
+    if (users.length > recipientLimit) toast.error(`Selected the first ${recipientLimit} recipients; campaigns are capped at ${recipientLimit}.`)
+    setSelected(eligible)
+  }
 
   const sendCampaign = async () => {
     if (audience === 'selected' && selected.length === 0) return toast.error('Select at least one recipient')
     if (template === 'custom' && (!subject.trim() || message.trim().length < 10)) return toast.error('Enter a subject and message of at least 10 characters')
     setSending(true)
     try {
-      const response = await fetch('/api/admin/email', {
+      const response = await adminFetch('/api/admin/email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ audience, userIds: selected, template, subject, message }),
@@ -1031,13 +1064,141 @@ function EmailTab() {
       <div><h3 className="font-bold text-xl">Email Center</h3><p className="text-gray-500 text-sm mt-1">Send a randomized account update or custom branded message to all active users or selected recipients.</p></div>
       <div className="grid lg:grid-cols-2 gap-5">
         <div className="card-dark p-6 space-y-5">
-          <div><label className="block text-sm font-medium text-gray-300 mb-2">Recipient group</label><div className="grid grid-cols-2 gap-2">{(['selected', 'all'] as const).map(option => <button key={option} onClick={() => setAudience(option)} className={`py-3 rounded-xl border text-sm font-semibold ${audience === option ? 'border-[#c9a84c] bg-[#c9a84c]/10 text-[#c9a84c]' : 'border-[#1e1e35] text-gray-400'}`}>{option === 'all' ? `All active users (${users.length})` : `Selected (${selected.length})`}</button>)}</div></div>
+          <div><label className="block text-sm font-medium text-gray-300 mb-2">Recipient group</label>{users.length > recipientLimit && <p className="mb-2 text-xs text-amber-300">There are {users.length} active recipients; an all-user campaign exceeds the {recipientLimit}-recipient cap and will be blocked without sending.</p>}<div className="grid grid-cols-2 gap-2">{(['selected', 'all'] as const).map(option => <button key={option} onClick={() => setAudience(option)} className={`py-3 rounded-xl border text-sm font-semibold ${audience === option ? 'border-[#c9a84c] bg-[#c9a84c]/10 text-[#c9a84c]' : 'border-[#1e1e35] text-gray-400'}`}>{option === 'all' ? `All active users (${users.length})` : `Selected (${selected.length})`}</button>)}</div></div>
           <div><label className="block text-sm font-medium text-gray-300 mb-2">Message template</label><select value={template} onChange={event => setTemplate(event.target.value as 'random' | 'custom')} className="w-full bg-[#0a0a14] border border-[#1e1e35] rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#c9a84c]"><option value="random">Randomized professional account update</option><option value="custom">Custom branded message</option></select></div>
           {template === 'custom' && <><div><label className="block text-sm font-medium text-gray-300 mb-2">Subject</label><input value={subject} onChange={event => setSubject(event.target.value)} maxLength={160} placeholder="Your AurexConnect update" className="w-full bg-[#0a0a14] border border-[#1e1e35] rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-[#c9a84c]" /></div><div><label className="block text-sm font-medium text-gray-300 mb-2">Message</label><textarea value={message} onChange={event => setMessage(event.target.value)} rows={7} maxLength={5000} placeholder="Write a clear, professional message..." className="w-full bg-[#0a0a14] border border-[#1e1e35] rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-[#c9a84c] resize-none" /></div></>}
-          <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-4 text-blue-300 text-xs leading-relaxed">Randomized messages are selected per recipient and include a personalized greeting plus a secure dashboard link. Transactional emails such as ROI, deposits, withdrawals, and KYC decisions are sent automatically.</div>
+          <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-4 text-blue-300 text-xs leading-relaxed">Campaigns are capped at {recipientLimit} recipients per send. Larger audiences are rejected before any email is sent; select a batch of {recipientLimit} or fewer. Randomized messages are personalized. Transactional emails are sent automatically.</div>
           <button onClick={sendCampaign} disabled={sending || (audience === 'selected' && selected.length === 0)} className="btn-gold w-full py-3 rounded-xl flex items-center justify-center gap-2 disabled:opacity-50">{sending ? <><Loader2 size={16} className="animate-spin" /> Sending...</> : <><Mail size={16} /> Send email campaign</>}</button>
         </div>
-        <div className="card-dark overflow-hidden"><div className="p-5 border-b border-[#1e1e35] flex items-center justify-between"><div><h4 className="font-bold">Active recipients</h4><p className="text-gray-500 text-xs mt-1">Only active investor accounts are listed.</p></div><button onClick={selectAll} className="text-xs text-[#c9a84c] hover:underline">{selected.length === users.length ? 'Clear all' : 'Select all'}</button></div>{loading ? <div className="h-64 flex items-center justify-center"><Spinner /></div> : <div className="max-h-[520px] overflow-y-auto divide-y divide-[#1e1e35]">{users.map(user => <label key={user.id} className="flex items-center gap-3 p-4 hover:bg-white/5 cursor-pointer"><input type="checkbox" checked={selected.includes(user.id)} onChange={() => toggleUser(user.id)} className="accent-[#c9a84c]" /><span className="min-w-0"><span className="block text-sm text-white truncate">{user.fullName}</span><span className="block text-xs text-gray-500 truncate">{user.email}</span></span></label>)}{users.length === 0 && <div className="p-8 text-center text-gray-500 text-sm">No active users found.</div>}</div>}</div>
+        <div className="card-dark overflow-hidden"><div className="p-5 border-b border-[#1e1e35] flex items-center justify-between"><div><h4 className="font-bold">Active recipients</h4><p className="text-gray-500 text-xs mt-1">Only active investor accounts are listed.</p></div><button onClick={selectAll} className="text-xs text-[#c9a84c] hover:underline">{selected.length === users.length ? 'Clear all' : `Select up to ${recipientLimit}`}</button></div>{loading ? <div className="h-64 flex items-center justify-center"><Spinner /></div> : <div className="max-h-[520px] overflow-y-auto divide-y divide-[#1e1e35]">{users.map(user => <label key={user.id} className="flex items-center gap-3 p-4 hover:bg-white/5 cursor-pointer"><input type="checkbox" checked={selected.includes(user.id)} onChange={() => toggleUser(user.id)} className="accent-[#c9a84c]" /><span className="min-w-0"><span className="block text-sm text-white truncate">{user.fullName}</span><span className="block text-xs text-gray-500 truncate">{user.email}</span></span></label>)}{users.length === 0 && <div className="p-8 text-center text-gray-500 text-sm">No active users found.</div>}</div>}</div>
+      </div>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Admin Settings — deposit methods and receiving addresses
+// ─────────────────────────────────────────────────────────────────────
+type PaymentMethod = { id: string; currency: string; label: string; address: string; network: string; isActive: boolean }
+type PaymentMethodForm = { currency: string; label: string; address: string; network: string }
+const emptyPaymentMethod: PaymentMethodForm = { currency: '', label: '', address: '', network: '' }
+
+function SettingsTab() {
+  const [methods, setMethods] = useState<PaymentMethod[]>([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [form, setForm] = useState<PaymentMethodForm>(emptyPaymentMethod)
+
+  const loadMethods = useCallback(async () => {
+    setLoading(true)
+    try {
+      const response = await adminFetch('/api/admin/wallet-addresses')
+      const data = await response.json()
+      setMethods(response.ok && Array.isArray(data.methods) ? data.methods : [])
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { void loadMethods() }, [loadMethods])
+
+  const resetForm = () => {
+    setEditingId(null)
+    setForm(emptyPaymentMethod)
+  }
+
+  const saveMethod = async (event: React.FormEvent) => {
+    event.preventDefault()
+    const currentMethod = editingId ? methods.find(method => method.id === editingId) : undefined
+    if (currentMethod && (currentMethod.address !== form.address || currentMethod.network !== form.network)) {
+      const confirmed = window.confirm('You are changing the deposit address or network shown to customers. Verify the new details carefully; incorrect deposit instructions can cause customers to lose funds. Continue?')
+      if (!confirmed) return
+    }
+    setSaving(true)
+    try {
+      const response = await adminFetch('/api/admin/wallet-addresses', {
+        method: editingId ? 'PATCH' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editingId ? { id: editingId, ...form } : form),
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        toast.error(data.error || 'Could not save payment method')
+        return
+      }
+      toast.success(editingId ? 'Payment method updated' : 'Payment method added')
+      resetForm()
+      await loadMethods()
+    } catch {
+      toast.error('Could not save payment method')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const editMethod = (method: PaymentMethod) => {
+    setEditingId(method.id)
+    setForm({ currency: method.currency, label: method.label, address: method.address, network: method.network })
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  const toggleMethod = async (method: PaymentMethod) => {
+    try {
+      const response = await adminFetch('/api/admin/wallet-addresses', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: method.id, isActive: !method.isActive }),
+      })
+      const data = await response.json()
+      if (!response.ok) return toast.error(data.error || 'Could not change payment method status')
+      toast.success(data.method.isActive ? 'Payment method is now visible to users' : 'Payment method is hidden from new deposits')
+      await loadMethods()
+    } catch {
+      toast.error('Could not change payment method status')
+    }
+  }
+
+  const fieldClass = 'w-full bg-[#0a0a14] border border-[#1e1e35] rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-[#c9a84c]'
+
+  return (
+    <div className="space-y-6 max-w-6xl">
+      <div>
+        <h2 className="text-xl font-bold">Website Settings</h2>
+        <p className="text-gray-500 text-sm mt-1">Manage the payment methods and deposit addresses displayed to customers. Only active methods appear on the deposit page; changes apply to new deposit submissions.</p>
+      </div>
+
+      <div className="grid xl:grid-cols-[minmax(320px,0.8fr)_1.2fr] gap-5 items-start">
+        <form onSubmit={saveMethod} className="card-dark p-6 space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <div><h3 className="font-bold">{editingId ? 'Edit payment method' : 'Add payment method'}</h3><p className="text-xs text-gray-500 mt-1">Use a unique code such as BTC or USDT-TRC20.</p></div>
+            {editingId && <button type="button" onClick={resetForm} className="text-xs text-gray-400 hover:text-white">Cancel</button>}
+          </div>
+          <label className="block"><span className="block text-xs text-gray-400 mb-2">Method code</span><input required maxLength={20} value={form.currency} onChange={event => setForm(current => ({ ...current, currency: event.target.value.toUpperCase() }))} placeholder="e.g. BTC or USDT-TRC20" className={fieldClass} /></label>
+          <label className="block"><span className="block text-xs text-gray-400 mb-2">Display name</span><input required maxLength={80} value={form.label} onChange={event => setForm(current => ({ ...current, label: event.target.value }))} placeholder="e.g. Tether (TRC20)" className={fieldClass} /></label>
+          <label className="block"><span className="block text-xs text-gray-400 mb-2">Network</span><input required maxLength={64} value={form.network} onChange={event => setForm(current => ({ ...current, network: event.target.value }))} placeholder="e.g. Bitcoin, Ethereum, TRC20" className={fieldClass} /></label>
+          <label className="block"><span className="block text-xs text-gray-400 mb-2">Deposit address</span><textarea required minLength={8} maxLength={300} rows={3} value={form.address} onChange={event => setForm(current => ({ ...current, address: event.target.value }))} placeholder="Enter the address users should send funds to" className={`${fieldClass} resize-y font-mono`} /></label>
+          <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/5 p-3 text-xs leading-relaxed text-yellow-200">Double-check the address and network before saving. An incorrect address may cause customer funds to be lost. Deactivate a method to hide it from new deposits without deleting it.</div>
+          <button type="submit" disabled={saving} className="btn-gold w-full py-3 rounded-xl flex items-center justify-center gap-2 disabled:opacity-50">
+            {saving ? <Loader2 size={15} className="animate-spin" /> : editingId ? <Save size={15} /> : <PlusCircle size={15} />}
+            {saving ? 'Saving…' : editingId ? 'Save changes' : 'Add payment method'}
+          </button>
+        </form>
+
+        <div className="card-dark overflow-hidden">
+          <div className="p-5 border-b border-[#1e1e35] flex items-center justify-between gap-3"><div><h3 className="font-bold">Payment methods</h3><p className="text-gray-500 text-xs mt-1">{methods.filter(method => method.isActive).length} active · {methods.length} total</p></div><button type="button" onClick={() => void loadMethods()} className="text-xs text-[#c9a84c] hover:underline">Refresh</button></div>
+          {loading ? <div className="h-40 flex items-center justify-center"><Spinner /></div> : methods.length === 0 ? <div className="p-10 text-center"><Wallet size={30} className="mx-auto mb-3 text-gray-600" /><p className="text-sm text-gray-300">No payment methods configured</p><p className="text-xs text-gray-500 mt-1">Add a method to make it available on the user deposit page.</p></div> : <div className="divide-y divide-[#1e1e35]">
+            {methods.map(method => (
+              <div key={method.id} className="p-5 space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0"><div className="flex items-center gap-2 flex-wrap"><h4 className="font-semibold">{method.label}</h4><code className="rounded bg-[#0a0a14] px-2 py-0.5 text-[11px] text-[#c9a84c]">{method.currency}</code><span className={`text-[10px] px-2 py-0.5 rounded-full ${method.isActive ? 'bg-green-400/10 text-green-400' : 'bg-gray-400/10 text-gray-400'}`}>{method.isActive ? 'Active' : 'Hidden'}</span></div><p className="text-xs text-gray-500 mt-1">Network: {method.network}</p></div>
+                  <div className="flex shrink-0 items-center gap-2"><button type="button" onClick={() => editMethod(method)} className="rounded-lg border border-[#1e1e35] px-3 py-2 text-xs text-gray-300 hover:text-white">Edit</button><button type="button" onClick={() => void toggleMethod(method)} className={`rounded-lg border px-3 py-2 text-xs ${method.isActive ? 'border-red-500/30 text-red-300 hover:bg-red-400/10' : 'border-green-500/30 text-green-300 hover:bg-green-400/10'}`}>{method.isActive ? 'Deactivate' : 'Activate'}</button></div>
+                </div>
+                <div className="rounded-lg bg-[#0a0a14] border border-[#1e1e35] px-3 py-2"><span className="block text-[10px] uppercase tracking-wider text-gray-600 mb-1">Address</span><code className="block break-all text-xs text-gray-300">{method.address}</code></div>
+              </div>
+            ))}
+          </div>}
+        </div>
       </div>
     </div>
   )
@@ -1049,7 +1210,7 @@ function EmailTab() {
 function OverviewTab() {
   const [stats, setStats] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  useEffect(() => { fetch('/api/admin/stats').then(r => r.json()).then(d => { setStats(d); setLoading(false) }) }, [])
+  useEffect(() => { adminFetch('/api/admin/stats').then(r => r.json()).then(d => { setStats(d); setLoading(false) }) }, [])
   if (loading) return <div className="flex items-center justify-center h-40"><Spinner /></div>
   const cards = [
     { label: 'Total Users', value: stats?.totalUsers ?? 0, icon: Users, color: '#c9a84c' },
@@ -1101,7 +1262,7 @@ export default function AdminPage() {
     if (status === 'authenticated' && session?.user?.role !== 'ADMIN') router.push('/dashboard')
   }, [status, session, router])
 
-  if (status === 'loading') return <div className="min-h-screen bg-[#0a0a14] flex items-center justify-center"><div className="w-10 h-10 rounded-full border-2 border-[#c9a84c] border-t-transparent animate-spin" /></div>
+  if (status === 'loading' || status === 'unauthenticated' || session?.user?.role !== 'ADMIN' || !session.user.isActive) return <div className="min-h-screen bg-[#0a0a14] flex items-center justify-center"><div className="w-10 h-10 rounded-full border-2 border-[#c9a84c] border-t-transparent animate-spin" /></div>
 
   const TABS = [
     { id: 'overview', label: 'Overview', icon: BarChart3 },
@@ -1111,6 +1272,7 @@ export default function AdminPage() {
     { id: 'users', label: 'Users', icon: Users },
     { id: 'roi', label: 'ROI Engine', icon: TrendingUp },
     { id: 'email', label: 'Email Center', icon: Mail },
+    { id: 'settings', label: 'Settings', icon: Settings },
   ] as const
 
   return (
@@ -1120,7 +1282,12 @@ export default function AdminPage() {
           <div className="w-9 h-9 rounded-lg bg-purple-500/20 border border-purple-500/30 flex items-center justify-center"><Shield size={18} className="text-purple-400" /></div>
           <div><div className="text-purple-400 text-xs font-semibold uppercase tracking-widest">Admin dashboard</div><h1 className="text-xl font-black">AurexConnect Operations</h1></div>
         </div>
-        <a href="/" className="text-sm text-gray-400 hover:text-white border border-[#1e1e35] px-4 py-2 rounded-xl hover:border-[#c9a84c]/40 transition-all">View public site</a>
+        <div className="flex items-center gap-2">
+          <a href="/" className="text-sm text-gray-400 hover:text-white border border-[#1e1e35] px-4 py-2 rounded-xl hover:border-[#c9a84c]/40 transition-all">View public site</a>
+          <button onClick={() => signOut({ callbackUrl: '/auth/login' })} className="flex items-center gap-2 text-sm text-gray-400 hover:text-white border border-[#1e1e35] px-4 py-2 rounded-xl hover:border-red-400/40 hover:text-red-300 transition-all" aria-label="Log out of admin dashboard">
+            <LogOut size={15} /> Log out
+          </button>
+        </div>
       </div>
 
       <div className="border-b border-[#1e1e35] bg-[#12121f] px-8 overflow-x-auto">
@@ -1142,6 +1309,7 @@ export default function AdminPage() {
         {activeTab === 'users' && <UsersTab />}
         {activeTab === 'roi' && <RoiTab />}
         {activeTab === 'email' && <EmailTab />}
+        {activeTab === 'settings' && <SettingsTab />}
       </div>
     </div>
   )

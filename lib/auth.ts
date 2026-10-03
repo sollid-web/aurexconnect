@@ -20,28 +20,21 @@ export const authOptions: NextAuthOptions = {
           where: { email: credentials.email.toLowerCase() },
         })
 
-        if (!user) {
-          throw new Error('Invalid email or password')
-        }
-
-        if (!user.isActive) {
-          throw new Error('Your account has been suspended. Contact support.')
-        }
-
+        if (!user) throw new Error('Invalid email or password')
+        if (!user.isActive) throw new Error('Your account has been suspended. Contact support.')
         if (process.env.REQUIRE_EMAIL_VERIFICATION !== 'false' && !user.emailVerified) {
           throw new Error('Please verify your email address before signing in.')
         }
 
         const passwordMatch = await bcrypt.compare(credentials.password, user.password)
-        if (!passwordMatch) {
-          throw new Error('Invalid email or password')
-        }
+        if (!passwordMatch) throw new Error('Invalid email or password')
 
         return {
           id: user.id,
           email: user.email,
           name: user.fullName,
           role: user.role,
+          isActive: user.isActive,
           createdAt: Math.floor(user.createdAt.getTime() / 1000),
         }
       },
@@ -52,20 +45,36 @@ export const authOptions: NextAuthOptions = {
       if (user) {
         token.id = user.id
         token.role = (user as any).role
+        token.isActive = (user as any).isActive
         token.createdAt = (user as any).createdAt
+      }
+
+      // Refresh authorization claims from the source of truth on every session refresh.
+      if (token.id) {
+        const currentUser = await prisma.user.findUnique({
+          where: { id: token.id },
+          select: { role: true, isActive: true, createdAt: true },
+        })
+        token.role = currentUser?.role ?? 'USER'
+        token.isActive = Boolean(currentUser?.isActive)
+        token.createdAt = currentUser ? Math.floor(currentUser.createdAt.getTime() / 1000) : 0
       }
       return token
     },
     async session({ session, token }) {
-      if (token) {
-        session.user.id = token.id as string
-        session.user.role = token.role as string
-        if (!token.createdAt && token.id) {
-          const existingUser = await prisma.user.findUnique({ where: { id: token.id as string }, select: { createdAt: true } })
-          token.createdAt = existingUser ? Math.floor(existingUser.createdAt.getTime() / 1000) : 0
-        }
-        session.user.createdAt = token.createdAt as number
-      }
+      if (!token.id) return null as any
+
+      // Check again while materializing the session; inactive/deleted users receive no session.
+      const currentUser = await prisma.user.findUnique({
+        where: { id: token.id },
+        select: { role: true, isActive: true, createdAt: true },
+      })
+      if (!currentUser?.isActive) return null as any
+
+      session.user.id = token.id
+      session.user.role = currentUser.role
+      session.user.isActive = currentUser.isActive
+      session.user.createdAt = Math.floor(currentUser.createdAt.getTime() / 1000)
       return session
     },
   },
@@ -75,7 +84,7 @@ export const authOptions: NextAuthOptions = {
   },
   session: {
     strategy: 'jwt',
-    maxAge: 30 * 24 * 60 * 60, // 30 days
+    maxAge: 30 * 24 * 60 * 60,
   },
   secret: process.env.NEXTAUTH_SECRET,
 }
