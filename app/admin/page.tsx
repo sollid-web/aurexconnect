@@ -739,11 +739,21 @@ function KycTab() {
   useEffect(() => {
     if (!reviewing) { setSignedFiles({}); return }
     const paths = [reviewing.frontImageUrl, reviewing.backImageUrl, reviewing.selfieUrl].filter(Boolean)
+    let active = true
+    const objectUrls: string[] = []
     Promise.all(paths.map(async (path: string) => {
       const response = await fetch(`/api/admin/kyc/file?path=${encodeURIComponent(path)}`)
-      const data = await response.json()
-      return [path, data.url] as const
-    })).then(entries => setSignedFiles(Object.fromEntries(entries.filter(([, url]) => url))))
+      if (!response.ok) return [path, ''] as const
+      const url = URL.createObjectURL(await response.blob())
+      objectUrls.push(url)
+      return [path, url] as const
+    })).then(entries => {
+      if (active) setSignedFiles(Object.fromEntries(entries.filter(([, url]) => url)))
+    })
+    return () => {
+      active = false
+      objectUrls.forEach(url => URL.revokeObjectURL(url))
+    }
   }, [reviewing])
 
   const handleReview = async (action: 'approve' | 'reject', note: string) => {

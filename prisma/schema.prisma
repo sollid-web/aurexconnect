@@ -29,6 +29,7 @@ model User {
   updatedAt           DateTime             @updatedAt
   investments         Investment[]
   kycSubmissions      KycSubmission[]
+  kycDocuments        KycDocument[]
   notifications       Notification[]
   transactions        Transaction[]
   passwordResetTokens PasswordResetToken[]
@@ -122,6 +123,19 @@ model KycSubmission {
   user           User      @relation(fields: [userId], references: [id])
 
   @@map("kyc_submissions")
+}
+
+model KycDocument {
+  id           String   @id @default(cuid())
+  userId       String
+  data         Bytes
+  mimeType     String
+  originalName String
+  createdAt    DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("kyc_documents")
 }
 
 model Notification {

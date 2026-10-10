@@ -58,9 +58,18 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
     const data = kycSchema.parse(body)
-    const ownerPrefix = `${session.user.id}/`
-    if (![data.frontImageUrl, data.backImageUrl, data.selfieUrl].filter((path): path is string => Boolean(path)).every(path => path.startsWith(ownerPrefix))) {
-      return NextResponse.json({ error: 'Documents must be uploaded through the secure upload flow.' }, { status: 400 })
+    const documentRefs = [data.frontImageUrl, data.backImageUrl, data.selfieUrl].filter((path): path is string => Boolean(path))
+    const documentIds = documentRefs.filter(path => path.startsWith('neon:')).map(path => path.slice('neon:'.length))
+    if (documentIds.length !== documentRefs.length || documentIds.some(id => !id)) {
+      return NextResponse.json({ error: 'Documents must be uploaded through the secure Neon upload flow.' }, { status: 400 })
+    }
+
+    const ownedDocuments = await prisma.kycDocument.findMany({
+      where: { id: { in: documentIds }, userId: session.user.id },
+      select: { id: true },
+    })
+    if (new Set(documentIds).size !== documentIds.length || ownedDocuments.length !== documentIds.length) {
+      return NextResponse.json({ error: 'One or more uploaded documents are invalid or do not belong to your account.' }, { status: 400 })
     }
 
     // Check if user already has a pending or approved KYC

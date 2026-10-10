@@ -72,16 +72,17 @@ npm install
 
 ---
 
-### STEP 2 — Set Up Supabase (Free PostgreSQL Database)
+### STEP 2 — Set Up Neon PostgreSQL
 
-1. Go to **https://supabase.com** and create a free account
-2. Click **"New Project"** → enter a name (e.g. `aurexconnect`) and a strong DB password
-3. Wait ~2 minutes for provisioning
-4. Go to **Settings → Database → Connection String → URI**
-5. Copy the URI — it looks like:
+1. Go to **https://neon.tech** and create a project
+2. Create or select the `aurexconnect` database
+3. Copy the pooled connection string from the Neon dashboard
+4. It should look like:
    ```
-   postgresql://postgres:[YOUR-PASSWORD]@db.xxxxxxxx.supabase.co:5432/postgres
+   postgresql://user:password@ep-example.region.aws.neon.tech/neondb?sslmode=require
    ```
+
+KYC documents are stored privately in the Neon `kyc_documents` table. No Supabase storage account or credentials are required.
 
 ---
 
@@ -95,7 +96,7 @@ cp .env.example .env.local
 Then edit `.env.local`:
 
 ```env
-DATABASE_URL="postgresql://postgres:YourPassword@db.xxxxx.supabase.co:5432/postgres"
+DATABASE_URL="postgresql://user:password@ep-example.region.aws.neon.tech/neondb?sslmode=require"
 
 NEXTAUTH_SECRET="generate-with-openssl-rand-base64-32"
 NEXTAUTH_URL="http://localhost:3000"
