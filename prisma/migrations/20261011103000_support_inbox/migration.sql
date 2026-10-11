@@ -1,15 +1,6 @@
-DO $$ BEGIN
-  CREATE TYPE "SupportThreadStatus" AS ENUM ('OPEN', 'PENDING', 'RESOLVED');
-EXCEPTION WHEN duplicate_object THEN NULL;
-END $$;
-DO $$ BEGIN
-  CREATE TYPE "SupportMessageDirection" AS ENUM ('INBOUND', 'OUTBOUND', 'NOTE');
-EXCEPTION WHEN duplicate_object THEN NULL;
-END $$;
-DO $$ BEGIN
-  CREATE TYPE "SupportDeliveryStatus" AS ENUM ('DELIVERED', 'QUEUED', 'SENT', 'FAILED');
-EXCEPTION WHEN duplicate_object THEN NULL;
-END $$;
+CREATE TYPE "SupportThreadStatus" AS ENUM ('OPEN', 'PENDING', 'RESOLVED');
+CREATE TYPE "SupportMessageDirection" AS ENUM ('INBOUND', 'OUTBOUND', 'NOTE');
+CREATE TYPE "SupportDeliveryStatus" AS ENUM ('DELIVERED', 'QUEUED', 'SENT', 'FAILED');
 
 CREATE TABLE IF NOT EXISTS "support_threads" (
   "id" TEXT NOT NULL,
@@ -21,7 +12,8 @@ CREATE TABLE IF NOT EXISTS "support_threads" (
   "lastMessageAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "updatedAt" TIMESTAMP(3) NOT NULL,
-  CONSTRAINT "support_threads_pkey" PRIMARY KEY ("id")
+  CONSTRAINT "support_threads_pkey" PRIMARY KEY ("id"),
+  CONSTRAINT "support_threads_assignedAdminId_fkey" FOREIGN KEY ("assignedAdminId") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS "support_messages" (
@@ -40,7 +32,9 @@ CREATE TABLE IF NOT EXISTS "support_messages" (
   "textBody" TEXT NOT NULL,
   "authorAdminId" TEXT,
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  CONSTRAINT "support_messages_pkey" PRIMARY KEY ("id")
+  CONSTRAINT "support_messages_pkey" PRIMARY KEY ("id"),
+  CONSTRAINT "support_messages_threadId_fkey" FOREIGN KEY ("threadId") REFERENCES "support_threads"("id") ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT "support_messages_authorAdminId_fkey" FOREIGN KEY ("authorAdminId") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE
 );
 
 ALTER TABLE "support_messages" ADD COLUMN IF NOT EXISTS "emailSubject" TEXT;
@@ -56,7 +50,8 @@ CREATE TABLE IF NOT EXISTS "support_attachments" (
   "contentId" TEXT,
   "size" INTEGER,
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  CONSTRAINT "support_attachments_pkey" PRIMARY KEY ("id")
+  CONSTRAINT "support_attachments_pkey" PRIMARY KEY ("id"),
+  CONSTRAINT "support_attachments_messageId_fkey" FOREIGN KEY ("messageId") REFERENCES "support_messages"("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS "support_audit_logs" (
@@ -66,7 +61,9 @@ CREATE TABLE IF NOT EXISTS "support_audit_logs" (
   "action" TEXT NOT NULL,
   "details" TEXT,
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  CONSTRAINT "support_audit_logs_pkey" PRIMARY KEY ("id")
+  CONSTRAINT "support_audit_logs_pkey" PRIMARY KEY ("id"),
+  CONSTRAINT "support_audit_logs_threadId_fkey" FOREIGN KEY ("threadId") REFERENCES "support_threads"("id") ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT "support_audit_logs_actorAdminId_fkey" FOREIGN KEY ("actorAdminId") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS "support_messages_providerEmailId_key" ON "support_messages"("providerEmailId");
@@ -81,40 +78,3 @@ CREATE INDEX IF NOT EXISTS "support_messages_inReplyTo_idx" ON "support_messages
 CREATE INDEX IF NOT EXISTS "support_attachments_messageId_idx" ON "support_attachments"("messageId");
 CREATE INDEX IF NOT EXISTS "support_audit_logs_threadId_createdAt_idx" ON "support_audit_logs"("threadId", "createdAt");
 CREATE INDEX IF NOT EXISTS "support_audit_logs_actorAdminId_createdAt_idx" ON "support_audit_logs"("actorAdminId", "createdAt");
-
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'support_threads_assignedAdminId_fkey') THEN
-    ALTER TABLE "support_threads" ADD CONSTRAINT "support_threads_assignedAdminId_fkey"
-      FOREIGN KEY ("assignedAdminId") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-  END IF;
-END $$;
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'support_messages_threadId_fkey') THEN
-    ALTER TABLE "support_messages" ADD CONSTRAINT "support_messages_threadId_fkey"
-      FOREIGN KEY ("threadId") REFERENCES "support_threads"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-  END IF;
-END $$;
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'support_messages_authorAdminId_fkey') THEN
-    ALTER TABLE "support_messages" ADD CONSTRAINT "support_messages_authorAdminId_fkey"
-      FOREIGN KEY ("authorAdminId") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-  END IF;
-END $$;
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'support_attachments_messageId_fkey') THEN
-    ALTER TABLE "support_attachments" ADD CONSTRAINT "support_attachments_messageId_fkey"
-      FOREIGN KEY ("messageId") REFERENCES "support_messages"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-  END IF;
-END $$;
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'support_audit_logs_threadId_fkey') THEN
-    ALTER TABLE "support_audit_logs" ADD CONSTRAINT "support_audit_logs_threadId_fkey"
-      FOREIGN KEY ("threadId") REFERENCES "support_threads"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-  END IF;
-END $$;
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'support_audit_logs_actorAdminId_fkey') THEN
-    ALTER TABLE "support_audit_logs" ADD CONSTRAINT "support_audit_logs_actorAdminId_fkey"
-      FOREIGN KEY ("actorAdminId") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-  END IF;
-END $$;
