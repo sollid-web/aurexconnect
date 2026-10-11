@@ -26,14 +26,20 @@ export default function DashboardPage() {
   const [portfolio, setPortfolio] = useState<PortfolioData | null>(null)
   const [range, setRange] = useState('30')
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
 
   useEffect(() => {
     let mounted = true
     setLoading(true)
-    Promise.all([fetch('/api/user/me').then(r => r.json()), fetch(`/api/user/portfolio?range=${range}`).then(r => r.json())])
-      .then(([user, summary]) => { if (mounted) { setData(user); setPortfolio(summary); setLoading(false) } })
-      .catch(() => { if (mounted) setLoading(false) })
+    setLoadError(null)
+    Promise.all([fetch('/api/user/me'), fetch(`/api/user/portfolio?range=${range}`)])
+      .then(async ([userResponse, portfolioResponse]) => {
+        const [user, summary] = await Promise.all([userResponse.json(), portfolioResponse.json()])
+        if (!userResponse.ok || !portfolioResponse.ok || user.error || summary.error) throw new Error(user.error || summary.error || 'Dashboard data could not be loaded')
+        if (mounted) { setData(user); setPortfolio(summary); setLoading(false) }
+      })
+      .catch(error => { if (mounted) { setLoadError(error instanceof Error ? error.message : 'Dashboard data could not be loaded'); setLoading(false) } })
     return () => { mounted = false }
   }, [range])
 
@@ -44,6 +50,7 @@ export default function DashboardPage() {
   }
 
   if (loading) return <div className="flex items-center justify-center h-64"><div className="w-10 h-10 rounded-full border-2 border-[#c9a84c] border-t-transparent animate-spin" /></div>
+  if (loadError) return <div className="mx-auto mt-12 max-w-lg rounded-2xl border border-red-400/20 bg-red-400/10 p-6 text-center"><AlertTriangle className="mx-auto mb-3 text-red-300" size={28} /><h2 className="font-bold text-red-200">Dashboard temporarily unavailable</h2><p className="mt-2 text-sm text-red-200/70">{loadError}</p><button onClick={() => window.location.reload()} className="mt-4 rounded-xl bg-red-300/15 px-4 py-2 text-sm font-semibold text-red-100">Try again</button></div>
 
   const summary = portfolio?.summary || {}
   const health = portfolio?.health || {}

@@ -1,19 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { requireActiveAdmin } from '@/lib/server-auth'
 import { createNotification } from '@/lib/notifications'
 import { addDays } from 'date-fns'
 import { balanceAdjustmentEmail, investmentActivatedEmail, passwordResetEmail, sendEmail } from '@/lib/email'
 import { createHash, randomBytes } from 'crypto'
 import { z } from 'zod'
 import bcrypt from 'bcryptjs'
-
-async function requireAdmin() {
-  const session = await getServerSession(authOptions)
-  if (!session || session.user.role !== 'ADMIN') return null
-  return session
-}
 
 async function audit(adminId: string, targetUserId: string, action: string, details?: string) {
   await prisma.adminAuditLog.create({ data: { adminId, targetUserId, action, details } }).catch(error => console.error('[Admin audit]', error))
@@ -30,7 +23,8 @@ const createUserSchema = profileSchema.extend({ role: z.enum(['USER', 'ADMIN']).
 
 // ── POST — create a managed account ───────────────────────────────────
 export async function POST(req: NextRequest) {
-  const session = await requireAdmin()
+  const auth = await requireActiveAdmin()
+  const session = auth?.session
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   try {
@@ -58,7 +52,8 @@ export async function POST(req: NextRequest) {
 
 // ── GET — list users with search + pagination ─────────────────────────
 export async function GET(req: NextRequest) {
-  const session = await requireAdmin()
+  const auth = await requireActiveAdmin()
+  const session = auth?.session
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { searchParams } = new URL(req.url)
@@ -112,7 +107,8 @@ export async function HEAD() {
 
 // ── PATCH — all admin actions on a user ──────────────────────────────
 export async function PATCH(req: NextRequest) {
-  const session = await requireAdmin()
+  const auth = await requireActiveAdmin()
+  const session = auth?.session
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await req.json()
@@ -308,16 +304,17 @@ export async function PATCH(req: NextRequest) {
   if (action === 'assignInvestment') {
     const { planId, amount, bypassBalance } = body
 
-    if (!planId || !amount || amount <= 0) {
+    if (typeof planId !== 'string' || !Number.isFinite(Number(amount)) || Number(amount) <= 0) {
       return NextResponse.json({ error: 'planId and amount are required' }, { status: 400 })
     }
+    const investmentAmount = Number(amount)
 
     const plan = await prisma.plan.findUnique({ where: { id: planId } })
     if (!plan || !plan.isActive) {
       return NextResponse.json({ error: 'Plan not found or inactive' }, { status: 404 })
     }
 
-    if (amount < plan.minAmount || (plan.maxAmount !== null && amount > plan.maxAmount)) {
+    if (investmentAmount < plan.minAmount || (plan.maxAmount !== null && investmentAmount > plan.maxAmount)) {
       return NextResponse.json(
         { error: `Amount must be at least $${plan.minAmount}${plan.maxAmount === null ? '' : ` and no more than $${plan.maxAmount}`} for this plan` },
         { status: 400 }
@@ -326,14 +323,14 @@ export async function PATCH(req: NextRequest) {
 
     // bypassBalance = admin can assign without user having enough balance
     // (admin is manually assigning, funds may have been deposited externally)
-    if (!bypassBalance && user.balance < amount) {
+    if (!bypassBalance && user.balance < investmentAmount) {
       return NextResponse.json(
         { error: `User balance ($${user.balance.toFixed(2)}) is insufficient. Enable "bypass balance check" to proceed anyway.` },
         { status: 400 }
       )
     }
 
-    const expectedProfit = (amount * plan.roiPercent) / 100
+    const expectedProfit = (investmentAmount * plan.roiPercent) / 100
     const endDate = addDays(new Date(), plan.durationDays)
 
     const ops: any[] = [
@@ -341,7 +338,7 @@ export async function PATCH(req: NextRequest) {
         data: {
           userId,
           planId: plan.id,
-          amount,
+          amount: investmentAmount,
           expectedProfit,
           endDate,
         },
@@ -351,7 +348,7 @@ export async function PATCH(req: NextRequest) {
           userId,
           type: 'DEPOSIT',
           status: 'COMPLETED',
-          amount,
+          amount: investmentAmount,
           note: `Admin-assigned investment — ${plan.name}`,
           reviewedBy: session.user.id,
           reviewedAt: new Date(),
@@ -359,39 +356,29 @@ export async function PATCH(req: NextRequest) {
       }),
     ]
 
-    // Only deduct balance if not bypassing AND user has enough
-    if (!bypassBalance) {
-      ops.push(
-        prisma.user.update({
-          where: { id: userId },
-          data: { balance: { decrement: amount } },
-        })
-      )
-    } else {
-      // Bypass: we still update totalDeposited for accounting
-      ops.push(
-        prisma.user.update({
-          where: { id: userId },
-          data: { totalDeposited: { increment: amount } },
-        })
-      )
-    }
+    ops.push(prisma.user.update({
+      where: { id: userId },
+      data: {
+        ...(bypassBalance ? {} : { balance: { decrement: investmentAmount } }),
+        totalDeposited: { increment: investmentAmount },
+      },
+    }))
 
     const results = await prisma.$transaction(ops)
     const investment = results[0] as any
-    await audit(session.user.id, userId, 'ASSIGN_INVESTMENT', `${plan.name} · $${amount.toFixed(2)}`)
+    await audit(session.user.id, userId, 'ASSIGN_INVESTMENT', `${plan.name} · $${investmentAmount.toFixed(2)}${bypassBalance ? ' · balance bypassed' : ''}`)
 
     await createNotification(
       userId,
       '🚀 Investment Activated',
-      `An investment of $${amount.toFixed(2)} in the ${plan.name} has been activated on your account. Total ROI of $${expectedProfit.toFixed(2)} will be credited in daily installments over ${plan.durationDays} day(s).`,
+      `An investment of $${investmentAmount.toFixed(2)} in the ${plan.name} has been activated on your account. Total ROI of $${expectedProfit.toFixed(2)} will be credited in daily installments over ${plan.durationDays} day(s).`,
       'success',
       '/dashboard'
     )
 
-    await sendEmail(user.email, investmentActivatedEmail(user.fullName, plan.name, amount, expectedProfit, plan.durationDays)).catch(error => console.error('[Investment email]', error))
+    await sendEmail(user.email, investmentActivatedEmail(user.fullName, plan.name, investmentAmount, expectedProfit, plan.durationDays)).catch(error => console.error('[Investment email]', error))
     return NextResponse.json({
-      message: `${plan.name} investment of $${amount} assigned to ${user.fullName}`,
+      message: `${plan.name} investment of $${investmentAmount} assigned to ${user.fullName}`,
       investment,
       expectedProfit,
       endDate,

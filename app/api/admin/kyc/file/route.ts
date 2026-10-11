@@ -1,13 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { requireActiveAdmin } from '@/lib/server-auth'
 
 export const runtime = 'nodejs'
 
 export async function GET(req: NextRequest) {
-  const session = await getServerSession(authOptions)
-  if (session?.user?.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!await requireActiveAdmin()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const path = new URL(req.url).searchParams.get('path')
   if (!path || !path.startsWith('neon:')) {

@@ -42,6 +42,7 @@ export const authOptions: NextAuthOptions = {
           email: user.email,
           name: user.fullName,
           role: user.role,
+          isActive: user.isActive,
           createdAt: Math.floor(user.createdAt.getTime() / 1000),
         }
       },
@@ -52,7 +53,17 @@ export const authOptions: NextAuthOptions = {
       if (user) {
         token.id = user.id
         token.role = (user as any).role
+        token.isActive = (user as any).isActive
         token.createdAt = (user as any).createdAt
+      }
+      if (token.id) {
+        const currentUser = await prisma.user.findUnique({
+          where: { id: token.id as string },
+          select: { role: true, isActive: true, createdAt: true },
+        })
+        token.role = currentUser?.role || 'SUSPENDED'
+        token.isActive = Boolean(currentUser?.isActive)
+        if (currentUser) token.createdAt = Math.floor(currentUser.createdAt.getTime() / 1000)
       }
       return token
     },
@@ -60,6 +71,7 @@ export const authOptions: NextAuthOptions = {
       if (token) {
         session.user.id = token.id as string
         session.user.role = token.role as string
+        session.user.isActive = token.isActive !== false
         if (!token.createdAt && token.id) {
           const existingUser = await prisma.user.findUnique({ where: { id: token.id as string }, select: { createdAt: true } })
           token.createdAt = existingUser ? Math.floor(existingUser.createdAt.getTime() / 1000) : 0

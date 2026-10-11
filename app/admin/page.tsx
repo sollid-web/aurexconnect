@@ -954,10 +954,10 @@ function RoiTab() {
   const triggerManual = async () => {
     setTriggering(true)
     try {
-      const res = await fetch('/api/cron/process-roi', { headers: { Authorization: `Bearer ${process.env.NEXT_PUBLIC_CRON_SECRET || 'dev-trigger'}` } })
+      const res = await fetch('/api/admin/roi/run', { method: 'POST' })
       const data = await res.json()
       if (res.ok) toast.success(`ROI run: ${data.investmentsDone} processed · $${data.totalProfitPaid?.toFixed(2)} paid`)
-      else toast.error('ROI trigger failed — check server logs')
+      else toast.error(data.error || 'ROI trigger failed — check server logs')
     } catch { toast.error('Failed to trigger ROI engine') }
     setTriggering(false)
   }

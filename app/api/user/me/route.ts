@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { getActiveAuth } from '@/lib/server-auth'
 import { z } from 'zod'
 
 const profileSchema = z.object({
@@ -12,8 +11,9 @@ const profileSchema = z.object({
 
 export async function GET() {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const auth = await getActiveAuth()
+    if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const session = auth.session
 
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
@@ -54,8 +54,9 @@ export async function GET() {
 
 export async function PATCH(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const auth = await getActiveAuth()
+    if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const session = auth.session
 
     const input = profileSchema.parse(await req.json())
     const user = await prisma.user.update({

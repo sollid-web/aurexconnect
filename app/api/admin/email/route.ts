@@ -1,26 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { requireActiveAdmin } from '@/lib/server-auth'
 import { customAdminEmail, randomizedCampaignEmail, sendEmail } from '@/lib/email'
 import { adminEmailSchema } from '@/lib/admin-email-schema'
 import { z } from 'zod'
 
-async function requireAdmin() {
-  const session = await getServerSession(authOptions)
-  return session?.user?.role === 'ADMIN' ? session : null
-}
-
 export async function GET() {
-  const session = await requireAdmin()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!await requireActiveAdmin()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const users = await prisma.user.findMany({ where: { role: 'USER', isActive: true }, select: { id: true, fullName: true, email: true }, orderBy: { fullName: 'asc' } })
   return NextResponse.json({ users })
 }
 
 export async function POST(req: NextRequest) {
-  const session = await requireAdmin()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const auth = await requireActiveAdmin()
+  if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   try {
     const input = adminEmailSchema.parse(await req.json())
@@ -41,6 +34,14 @@ export async function POST(req: NextRequest) {
     }
     const sent = results.filter(result => result.status === 'fulfilled' && result.value.sent).length
     const failed = results.length - sent
+    await prisma.adminAuditLog.create({
+      data: {
+        adminId: auth.user.id,
+        targetUserId: auth.user.id,
+        action: 'SEND_EMAIL_CAMPAIGN',
+        details: `${input.template} · audience=${input.audience} · recipients=${users.length} · sent=${sent} · failed=${failed}`,
+      },
+    })
     return NextResponse.json({ message: `Campaign processed for ${users.length} recipient(s)`, recipients: users.length, sent, failed })
   } catch (error) {
     if (error instanceof z.ZodError) return NextResponse.json({ error: error.errors[0].message }, { status: 400 })
