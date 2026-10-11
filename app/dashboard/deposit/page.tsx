@@ -1,22 +1,28 @@
 'use client'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Copy, CheckCircle, Upload } from 'lucide-react'
 import toast from 'react-hot-toast'
 
-const WALLETS = [
-  { currency: 'BTC', name: 'Bitcoin', address: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh', icon: '₿' },
-  { currency: 'ETH', name: 'Ethereum', address: '0x742d35Cc6634C0532925a3b844Bc454e4438f44e', icon: 'Ξ' },
-  { currency: 'USDT', name: 'Tether (TRC20)', address: 'TN3W4T8AYBFn9NkqL3b4W8ZkbPbXsAcRsM', icon: '₮' },
-]
-
 export default function DepositPage() {
-  const [selected, setSelected] = useState(WALLETS[0])
+  const [wallets, setWallets] = useState<any[]>([])
+  const [selected, setSelected] = useState<any>(null)
   const [amount, setAmount] = useState('')
   const [txHash, setTxHash] = useState('')
   const [copied, setCopied] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
+  useEffect(() => {
+    fetch('/api/settings').then(async response => {
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || 'Unable to load payment methods')
+      const methods = (data.paymentMethods || []).map((method: any) => ({ ...method, icon: method.currency === 'BTC' ? '₿' : method.currency === 'ETH' ? 'Ξ' : method.currency === 'USDT' ? '₮' : '◈' }))
+      setWallets(methods)
+      setSelected(methods[0] || null)
+    }).catch(() => toast.error('Payment methods are temporarily unavailable'))
+  }, [])
+
   const copy = () => {
+    if (!selected) return
     navigator.clipboard.writeText(selected.address)
     setCopied(true)
     toast.success('Address copied!')
@@ -25,7 +31,7 @@ export default function DepositPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!amount || !txHash) return toast.error('Please fill all fields')
+    if (!selected || !amount || !txHash) return toast.error('Please fill all fields')
     setSubmitting(true)
     try {
       const res = await fetch('/api/transactions', {
@@ -55,7 +61,7 @@ export default function DepositPage() {
       <div className="card-dark p-6">
         <h2 className="font-bold mb-4">Select Payment Method</h2>
         <div className="grid grid-cols-3 gap-3">
-          {WALLETS.map(w => (
+          {wallets.map(w => (
             <button key={w.currency} onClick={() => setSelected(w)}
               className={`p-4 rounded-xl border text-center transition-all ${selected.currency === w.currency
                 ? 'border-[#c9a84c] bg-[#c9a84c]/10' : 'border-[#1e1e35] hover:border-[#c9a84c]/40'}`}>
@@ -68,7 +74,7 @@ export default function DepositPage() {
       </div>
 
       {/* Wallet address */}
-      <div className="card-dark p-6">
+      {selected && <div className="card-dark p-6">
         <h2 className="font-bold mb-1">Send {selected.name} to this address</h2>
         <p className="text-gray-500 text-xs mb-4">Only send {selected.currency} to this address. Wrong network = lost funds.</p>
 
@@ -82,15 +88,15 @@ export default function DepositPage() {
         <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-4 text-yellow-400 text-xs">
           ⚠️ Minimum deposit: <strong>$50</strong>. Deposits are confirmed within 30 minutes after network confirmation.
         </div>
-      </div>
+      </div>}
 
       {/* Confirm deposit */}
-      <div className="card-dark p-6">
+      {selected && <div className="card-dark p-6">
         <h2 className="font-bold mb-4">Confirm Your Deposit</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">Amount (USD)</label>
-            <input type="number" min="50" value={amount} onChange={e => setAmount(e.target.value)}
+            <input type="number" min={selected.minDeposit || 10} value={amount} onChange={e => setAmount(e.target.value)}
               placeholder="e.g. 500"
               className="w-full bg-[#0a0a14] border border-[#1e1e35] rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-[#c9a84c] transition-colors" />
           </div>
@@ -105,7 +111,8 @@ export default function DepositPage() {
             {submitting ? 'Submitting...' : <><Upload size={16} /> Submit Deposit</>}
           </button>
         </form>
-      </div>
+      </div>}
+      {!selected && <div className="card-dark p-8 text-center text-gray-400">No payment methods are currently available.</div>}
     </div>
   )
 }

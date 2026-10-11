@@ -5,6 +5,8 @@ import { prisma } from '@/lib/prisma'
 import { createNotification, Notifs } from '@/lib/notifications'
 import { z } from 'zod'
 import { depositSubmittedEmail, sendEmail, withdrawalSubmittedEmail } from '@/lib/email'
+import { getActiveAuth } from '@/lib/server-auth'
+import { getSettings } from '@/lib/settings'
 
 const depositSchema = z.object({
   amount: z.number().min(10, 'Minimum deposit is $10'),
@@ -21,8 +23,9 @@ const withdrawSchema = z.object({
 
 // POST — create a deposit or withdrawal request
 export async function POST(req: NextRequest) {
-  const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const auth = await getActiveAuth()
+  if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const session = auth.session
 
   try {
     const body = await req.json()
@@ -31,6 +34,10 @@ export async function POST(req: NextRequest) {
     // ── DEPOSIT ─────────────────────────────────────────────
     if (type === 'DEPOSIT') {
       const { amount, currency, txHash, proofImageUrl } = depositSchema.parse(body)
+      const paymentMethod = await prisma.paymentMethod.findFirst({ where: { currency, isActive: true, isMaintenance: false } })
+      if (!paymentMethod) return NextResponse.json({ error: 'That payment method is currently unavailable' }, { status: 400 })
+      if (amount < paymentMethod.minDeposit || (paymentMethod.maxDeposit !== null && paymentMethod.maxDeposit !== undefined && amount > paymentMethod.maxDeposit)) return NextResponse.json({ error: 'Deposit amount is outside the current payment method limits' }, { status: 400 })
+      if (paymentMethod.requiresTxHash && !txHash) return NextResponse.json({ error: 'Transaction hash is required for this payment method' }, { status: 400 })
 
       // Check for duplicate txHash
       const existing = await prisma.transaction.findFirst({ where: { txHash } })
@@ -68,9 +75,14 @@ export async function POST(req: NextRequest) {
     // ── WITHDRAWAL ──────────────────────────────────────────
     if (type === 'WITHDRAWAL') {
       const { amount, walletAddress, currency } = withdrawSchema.parse(body)
+      const settings = await getSettings()
+      if (settings.withdrawals_enabled === false) return NextResponse.json({ error: 'Withdrawals are temporarily unavailable' }, { status: 503 })
 
       const user = await prisma.user.findUnique({ where: { id: session.user.id } })
       if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 })
+      if (settings.kyc_required_for_withdrawal !== false && user.kycStatus !== 'APPROVED') return NextResponse.json({ error: 'Approved KYC is required before withdrawing' }, { status: 403 })
+      if (typeof settings.withdrawal_minimum === 'number' && amount < settings.withdrawal_minimum) return NextResponse.json({ error: `Minimum withdrawal is $${settings.withdrawal_minimum}` }, { status: 400 })
+      if (typeof settings.withdrawal_maximum === 'number' && settings.withdrawal_maximum > 0 && amount > settings.withdrawal_maximum) return NextResponse.json({ error: `Maximum withdrawal is $${settings.withdrawal_maximum}` }, { status: 400 })
       if (user.balance < amount) {
         return NextResponse.json({ error: 'Insufficient balance' }, { status: 400 })
       }

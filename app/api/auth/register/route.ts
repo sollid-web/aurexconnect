@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { sendEmail, verificationEmail } from '@/lib/email'
 import { rateLimit, requestIp } from '@/lib/rate-limit'
+import { isSettingEnabled } from '@/lib/settings'
 
 const registerSchema = z.object({
   fullName: z.string().trim().min(2, 'Name must be at least 2 characters').max(100),
@@ -16,6 +17,7 @@ const registerSchema = z.object({
 })
 
 export async function POST(req: NextRequest) {
+  if (!await isSettingEnabled('registration_enabled', true)) return NextResponse.json({ error: 'Registration is temporarily closed' }, { status: 503 })
   const limit = rateLimit(`register:${requestIp(req)}`, 5, 60 * 60 * 1000)
   if (!limit.allowed) return NextResponse.json({ error: 'Too many registration attempts. Please try again later.' }, { status: 429 })
   try {

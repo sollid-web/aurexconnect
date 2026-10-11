@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { createNotification, Notifs } from '@/lib/notifications'
 import { dailyRoiEmail, referralBonusEmail, sendEmail } from '@/lib/email'
 import { calculateRoiCredit } from '@/lib/roi'
+import { isSettingEnabled } from '@/lib/settings'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -24,6 +25,8 @@ export async function GET(req: NextRequest) {
   let investmentsDone = 0
   let totalProfitPaid = 0
   const errors: string[] = []
+
+  if (!await isSettingEnabled('roi_enabled', true)) return NextResponse.json({ success: true, skipped: true, reason: 'ROI engine disabled by administrator' })
 
   try {
     const activeInvestments = await prisma.investment.findMany({
@@ -115,7 +118,7 @@ export async function GET(req: NextRequest) {
         if (result.roiDue > 0 || result.matured) {
           const notification = Notifs.dailyRoi(result.roiDue, result.planName, result.matured)
           await createNotification(result.user.id, notification.title, notification.message, notification.type, notification.link)
-          await sendEmail(result.user.email, dailyRoiEmail(result.user.fullName, result.planName, result.roiDue, result.totalPaid, result.expectedProfit, result.matured)).catch(error => console.error('[ROI email]', error))
+          if (await isSettingEnabled('roi_email_enabled', true)) await sendEmail(result.user.email, dailyRoiEmail(result.user.fullName, result.planName, result.roiDue, result.totalPaid, result.expectedProfit, result.matured)).catch(error => console.error('[ROI email]', error))
         }
         if (result.referral) {
           const referralNotification = Notifs.referralBonus(result.referral.amount)

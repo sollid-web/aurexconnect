@@ -158,6 +158,10 @@ model AdminAuditLog {
   targetUserId String
   action       String
   details      String?
+  previousValue String?
+  newValue      String?
+  ipAddress     String?
+  userAgent     String?
   createdAt    DateTime @default(now())
 
   @@index([adminId, createdAt])
@@ -218,4 +222,40 @@ enum InvestmentStatus {
   ACTIVE
   COMPLETED
   CANCELLED
+}
+
+model SiteSetting {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       String
+  valueType   String   @default("string")
+  description String?
+  updatedBy   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("site_settings")
+}
+
+model PaymentMethod {
+  id                    String   @id @default(cuid())
+  currency              String
+  name                  String
+  network               String
+  address               String
+  minDeposit            Float    @default(10)
+  maxDeposit            Float?
+  requiredConfirmations Int      @default(1)
+  requiresTxHash        Boolean  @default(true)
+  requiresProof         Boolean  @default(false)
+  isActive              Boolean  @default(true)
+  isMaintenance         Boolean  @default(false)
+  displayOrder          Int      @default(0)
+  instructions          String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  updatedBy             String?
+
+  @@index([isActive, displayOrder])
+  @@map("payment_methods")
 }

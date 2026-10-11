@@ -10,11 +10,11 @@ import {
   FileCheck, CheckCircle, XCircle, Eye, Clock,
   TrendingUp, Shield, BarChart3, AlertTriangle, X,
   MinusCircle, Wallet, ListOrdered, ChevronRight,
-  Receipt, ToggleLeft, ToggleRight, Mail, UserCog, KeyRound, Save
+  Receipt, ToggleLeft, ToggleRight, Mail, UserCog, KeyRound, Save, Settings, History
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
-type Tab = 'overview' | 'deposits' | 'withdrawals' | 'kyc' | 'users' | 'roi' | 'email'
+type Tab = 'overview' | 'deposits' | 'withdrawals' | 'kyc' | 'users' | 'roi' | 'email' | 'settings' | 'audit'
 
 // ─────────────────────────────────────────────────────────────────────
 // Shared helpers
@@ -1054,6 +1054,49 @@ function EmailTab() {
 }
 
 // ─────────────────────────────────────────────────────────────────────
+// Settings and Audit Tabs
+// ─────────────────────────────────────────────────────────────────────
+function SettingsTab() {
+  const [settings, setSettings] = useState<Record<string, any>>({})
+  const [methods, setMethods] = useState<any[]>([])
+  const [plans, setPlans] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [newMethod, setNewMethod] = useState({ currency: '', name: '', network: '', address: '', minDeposit: 10, maxDeposit: null as number | null, requiredConfirmations: 1, requiresTxHash: true, requiresProof: false, isActive: true, isMaintenance: false, displayOrder: 0, instructions: '' })
+  const load = useCallback(async () => {
+    setLoading(true)
+    try {
+      const [settingsResponse, methodsResponse, plansResponse] = await Promise.all([fetch('/api/admin/settings'), fetch('/api/admin/payment-methods'), fetch('/api/plans')])
+      const [settingsData, methodsData, plansData] = await Promise.all([settingsResponse.json(), methodsResponse.json(), plansResponse.json()])
+      if (!settingsResponse.ok || !methodsResponse.ok || !Array.isArray(plansData)) throw new Error('Settings could not be loaded')
+      setSettings(settingsData.settings || {}); setMethods(methodsData.paymentMethods || []); setPlans(plansData); setLoading(false)
+    } catch { toast.error('Settings could not be loaded'); setLoading(false) }
+  }, [])
+  useEffect(() => { load() }, [load])
+  const saveSettings = async () => {
+    setSaving(true)
+    try { const response = await fetch('/api/admin/settings', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(settings) }); const data = await response.json(); if (!response.ok) throw new Error(data.error); toast.success('Settings saved') } catch (error) { toast.error(error instanceof Error ? error.message : 'Settings could not be saved') } finally { setSaving(false) }
+  }
+  const updateMethod = async (method: any) => { const response = await fetch('/api/admin/payment-methods', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(method) }); if (response.ok) { toast.success('Payment method saved'); load() } else toast.error((await response.json()).error || 'Could not save payment method') }
+  const addMethod = async () => { const response = await fetch('/api/admin/payment-methods', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newMethod) }); if (response.ok) { toast.success('Payment method added'); setNewMethod({ currency: '', name: '', network: '', address: '', minDeposit: 10, maxDeposit: null, requiredConfirmations: 1, requiresTxHash: true, requiresProof: false, isActive: true, isMaintenance: false, displayOrder: 0, instructions: '' }); load() } else toast.error((await response.json()).error || 'Could not add payment method') }
+  const updatePlan = async (plan: any) => { const response = await fetch('/api/plans', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...plan, maxAmount: plan.maxAmount === '' ? null : Number(plan.maxAmount), minAmount: Number(plan.minAmount), roiPercent: Number(plan.roiPercent), durationDays: Number(plan.durationDays), referralBonus: Number(plan.referralBonus) }) }); if (response.ok) toast.success('Plan saved'); else toast.error((await response.json()).error || 'Could not save plan') }
+  if (loading) return <div className="flex items-center justify-center h-40"><Spinner /></div>
+  const flags = ['maintenance_mode', 'registration_enabled', 'withdrawals_enabled', 'kyc_required_for_withdrawal', 'public_activity_enabled', 'public_activity_preview_mode', 'roi_enabled', 'roi_email_enabled']
+  return <div className="space-y-6 max-w-6xl">
+    <div><h3 className="font-bold text-xl">Control Center</h3><p className="text-gray-500 text-sm mt-1">Manage operational settings without editing the codebase. Sensitive changes are audit logged.</p></div>
+    <section className="card-dark p-6"><div className="flex items-center justify-between mb-5"><div><h4 className="font-bold">Platform & Operations</h4><p className="text-gray-500 text-xs mt-1">Feature flags and customer-facing operational controls.</p></div><button onClick={saveSettings} disabled={saving} className="btn-gold px-4 py-2 rounded-lg text-xs font-semibold">{saving ? 'Saving...' : 'Save settings'}</button></div><div className="grid md:grid-cols-2 gap-3">{flags.map(key => <label key={key} className="flex items-center justify-between rounded-xl border border-[#1e1e35] bg-[#0a0a14] p-4"><span className="text-sm capitalize text-gray-300">{key.replaceAll('_', ' ')}</span><input type="checkbox" checked={settings[key] === 'true' || settings[key] === true} onChange={event => setSettings(current => ({ ...current, [key]: event.target.checked }))} className="h-4 w-4 accent-[#c9a84c]" /></label>)}</div><div className="grid md:grid-cols-2 lg:grid-cols-4 gap-3 mt-3"><label className="text-xs text-gray-500">Support email<input value={settings.support_email || ''} onChange={event => setSettings(current => ({ ...current, support_email: event.target.value }))} className="mt-2 w-full rounded-lg border border-[#1e1e35] bg-[#0a0a14] px-3 py-2 text-sm text-white" /></label><label className="text-xs text-gray-500">Site name<input value={settings.site_name || ''} onChange={event => setSettings(current => ({ ...current, site_name: event.target.value }))} className="mt-2 w-full rounded-lg border border-[#1e1e35] bg-[#0a0a14] px-3 py-2 text-sm text-white" /></label><label className="text-xs text-gray-500">Min withdrawal<input type="number" value={settings.withdrawal_minimum || ''} onChange={event => setSettings(current => ({ ...current, withdrawal_minimum: Number(event.target.value) }))} className="mt-2 w-full rounded-lg border border-[#1e1e35] bg-[#0a0a14] px-3 py-2 text-sm text-white" /></label><label className="text-xs text-gray-500">Max withdrawal (0 = unlimited)<input type="number" value={settings.withdrawal_maximum || ''} onChange={event => setSettings(current => ({ ...current, withdrawal_maximum: Number(event.target.value) }))} className="mt-2 w-full rounded-lg border border-[#1e1e35] bg-[#0a0a14] px-3 py-2 text-sm text-white" /></label></div></section>
+    <section className="card-dark p-6"><h4 className="font-bold mb-1">Payment Methods</h4><p className="text-gray-500 text-xs mb-5">Wallet addresses, networks, limits, and maintenance states shown on the deposit page.</p><div className="space-y-3">{methods.map(method => <div key={method.id} className="grid lg:grid-cols-8 gap-2 items-center rounded-xl border border-[#1e1e35] bg-[#0a0a14] p-3"><input value={method.name} onChange={event => setMethods(list => list.map(item => item.id === method.id ? { ...item, name: event.target.value } : item))} className="rounded bg-[#12121f] px-2 py-2 text-xs" /><input value={method.network} onChange={event => setMethods(list => list.map(item => item.id === method.id ? { ...item, network: event.target.value } : item))} className="rounded bg-[#12121f] px-2 py-2 text-xs" /><input value={method.address} onChange={event => setMethods(list => list.map(item => item.id === method.id ? { ...item, address: event.target.value } : item))} className="lg:col-span-3 rounded bg-[#12121f] px-2 py-2 text-xs" /><input type="number" value={method.minDeposit} onChange={event => setMethods(list => list.map(item => item.id === method.id ? { ...item, minDeposit: Number(event.target.value) } : item))} className="rounded bg-[#12121f] px-2 py-2 text-xs" /><label className="text-xs text-gray-400"><input type="checkbox" checked={method.isActive} onChange={event => setMethods(list => list.map(item => item.id === method.id ? { ...item, isActive: event.target.checked } : item))} className="mr-1 accent-[#c9a84c]" />Active</label><label className="text-xs text-gray-400"><input type="checkbox" checked={method.isMaintenance} onChange={event => setMethods(list => list.map(item => item.id === method.id ? { ...item, isMaintenance: event.target.checked } : item))} className="mr-1 accent-[#c9a84c]" />Maintenance</label><button onClick={() => updateMethod(method)} className="rounded-lg border border-[#c9a84c]/30 px-3 py-2 text-xs text-[#c9a84c]">Save</button></div>)}</div><div className="mt-5 grid lg:grid-cols-8 gap-2"><input placeholder="Currency" value={newMethod.currency} onChange={event => setNewMethod({ ...newMethod, currency: event.target.value })} className="rounded bg-[#0a0a14] border border-[#1e1e35] px-2 py-2 text-xs" /><input placeholder="Name" value={newMethod.name} onChange={event => setNewMethod({ ...newMethod, name: event.target.value })} className="rounded bg-[#0a0a14] border border-[#1e1e35] px-2 py-2 text-xs" /><input placeholder="Network" value={newMethod.network} onChange={event => setNewMethod({ ...newMethod, network: event.target.value })} className="rounded bg-[#0a0a14] border border-[#1e1e35] px-2 py-2 text-xs" /><input placeholder="Wallet address" value={newMethod.address} onChange={event => setNewMethod({ ...newMethod, address: event.target.value })} className="lg:col-span-3 rounded bg-[#0a0a14] border border-[#1e1e35] px-2 py-2 text-xs" /><button onClick={addMethod} className="btn-gold rounded-lg px-3 py-2 text-xs">Add method</button></div></section>
+    <section className="card-dark p-6"><h4 className="font-bold mb-1">Investment Plans</h4><p className="text-gray-500 text-xs mb-5">Changes apply to new investments; existing investments keep their stored terms.</p><div className="space-y-3">{plans.map(plan => <div key={plan.id} className="grid lg:grid-cols-8 gap-2 items-center rounded-xl border border-[#1e1e35] bg-[#0a0a14] p-3"><span className="text-sm font-semibold text-[#c9a84c]">{plan.name}</span><input type="number" value={plan.roiPercent} onChange={event => setPlans(list => list.map(item => item.id === plan.id ? { ...item, roiPercent: event.target.value } : item))} className="rounded bg-[#12121f] px-2 py-2 text-xs" placeholder="ROI %" /><input type="number" value={plan.minAmount} onChange={event => setPlans(list => list.map(item => item.id === plan.id ? { ...item, minAmount: event.target.value } : item))} className="rounded bg-[#12121f] px-2 py-2 text-xs" placeholder="Min" /><input type="number" value={plan.maxAmount ?? ''} onChange={event => setPlans(list => list.map(item => item.id === plan.id ? { ...item, maxAmount: event.target.value } : item))} className="rounded bg-[#12121f] px-2 py-2 text-xs" placeholder="Max" /><input type="number" value={plan.durationDays} onChange={event => setPlans(list => list.map(item => item.id === plan.id ? { ...item, durationDays: event.target.value } : item))} className="rounded bg-[#12121f] px-2 py-2 text-xs" placeholder="Days" /><label className="text-xs text-gray-400"><input type="checkbox" checked={plan.isActive} onChange={event => setPlans(list => list.map(item => item.id === plan.id ? { ...item, isActive: event.target.checked } : item))} className="mr-1 accent-[#c9a84c]" />Active</label><button onClick={() => updatePlan(plan)} className="rounded-lg border border-[#c9a84c]/30 px-3 py-2 text-xs text-[#c9a84c]">Save plan</button></div>)}</div></section>
+  </div>
+}
+
+function AuditTab() {
+  const [logs, setLogs] = useState<any[]>([])
+  useEffect(() => { fetch('/api/admin/audit').then(response => response.json()).then(data => setLogs(data.logs || [])).catch(() => toast.error('Audit logs could not be loaded')) }, [])
+  return <div className="space-y-5"><div><h3 className="font-bold text-xl">Audit Logs</h3><p className="text-gray-500 text-sm mt-1">Recent administrative changes and operational actions.</p></div><div className="card-dark overflow-x-auto"><table className="w-full text-left"><thead><tr className="border-b border-[#1e1e35] text-xs uppercase text-gray-500"><th className="p-4">Action</th><th className="p-4">Details</th><th className="p-4">Time</th></tr></thead><tbody>{logs.map(log => <tr key={log.id} className="border-b border-[#1e1e35] text-sm"><td className="p-4 text-[#c9a84c]">{log.action}</td><td className="p-4 text-gray-400">{log.details || '—'}</td><td className="p-4 text-gray-500">{formatDate(log.createdAt)}</td></tr>)}</tbody></table>{logs.length === 0 && <div className="p-10 text-center text-gray-500">No audit events found.</div>}</div></div>
+}
+
+// ─────────────────────────────────────────────────────────────────────
 // Overview Tab
 // ─────────────────────────────────────────────────────────────────────
 function OverviewTab() {
@@ -1121,6 +1164,8 @@ export default function AdminPage() {
     { id: 'users', label: 'Users', icon: Users },
     { id: 'roi', label: 'ROI Engine', icon: TrendingUp },
     { id: 'email', label: 'Email Center', icon: Mail },
+    { id: 'settings', label: 'Settings', icon: Settings },
+    { id: 'audit', label: 'Audit Logs', icon: History },
   ] as const
 
   return (
@@ -1152,6 +1197,8 @@ export default function AdminPage() {
         {activeTab === 'users' && <UsersTab />}
         {activeTab === 'roi' && <RoiTab />}
         {activeTab === 'email' && <EmailTab />}
+        {activeTab === 'settings' && <SettingsTab />}
+        {activeTab === 'audit' && <AuditTab />}
       </div>
     </div>
   )
