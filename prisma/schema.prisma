@@ -32,6 +32,9 @@ model User {
   notifications       Notification[]
   transactions        Transaction[]
   passwordResetTokens PasswordResetToken[]
+  assignedSupportThreads SupportThread[] @relation("SupportThreadAssignee")
+  authoredSupportMessages SupportMessage[] @relation("SupportMessageAuthor")
+  supportAuditEvents    SupportAuditLog[] @relation("SupportAuditActor")
 
   @@map("users")
 }
@@ -174,6 +177,84 @@ model RoiProcessingLog {
   @@map("roi_processing_logs")
 }
 
+model SupportThread {
+  id                String              @id @default(cuid())
+  senderEmail       String
+  senderName        String?
+  subject           String
+  status            SupportThreadStatus @default(OPEN)
+  assignedAdminId   String?
+  lastMessageAt     DateTime            @default(now())
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  assignedAdmin     User?               @relation("SupportThreadAssignee", fields: [assignedAdminId], references: [id], onDelete: SetNull)
+  messages          SupportMessage[]
+  auditEvents       SupportAuditLog[]
+
+  @@index([status, lastMessageAt])
+  @@index([assignedAdminId, status])
+  @@index([senderEmail])
+  @@map("support_threads")
+}
+
+model SupportMessage {
+  id                String                 @id @default(cuid())
+  threadId          String
+  direction         SupportMessageDirection
+  deliveryStatus    SupportDeliveryStatus  @default(DELIVERED)
+  providerEmailId   String?                @unique
+  idempotencyKey    String?                @unique
+  internetMessageId String?
+  inReplyTo         String?
+  fromAddress       String
+  toAddress         String?
+  emailSubject      String?
+  replyHeaders      Json?
+  textBody          String                 @db.Text
+  authorAdminId     String?
+  createdAt         DateTime               @default(now())
+  thread            SupportThread          @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  authorAdmin       User?                  @relation("SupportMessageAuthor", fields: [authorAdminId], references: [id], onDelete: SetNull)
+  attachments       SupportAttachment[]
+
+  @@index([threadId, createdAt])
+  @@index([inReplyTo])
+  @@index([internetMessageId])
+  @@map("support_messages")
+}
+
+model SupportAttachment {
+  id                  String         @id @default(cuid())
+  messageId           String
+  providerAttachmentId String
+  filename            String
+  contentType         String?
+  contentDisposition  String?
+  contentId           String?
+  size                Int?
+  createdAt           DateTime       @default(now())
+  message             SupportMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, providerAttachmentId])
+  @@index([messageId])
+  @@map("support_attachments")
+}
+
+model SupportAuditLog {
+  id            String        @id @default(cuid())
+  threadId      String
+  actorAdminId  String?
+  action        String
+  details       String?
+  createdAt     DateTime      @default(now())
+  thread        SupportThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  actorAdmin    User?         @relation("SupportAuditActor", fields: [actorAdminId], references: [id], onDelete: SetNull)
+
+  @@index([threadId, createdAt])
+  @@index([actorAdminId, createdAt])
+  @@map("support_audit_logs")
+}
+
 enum UserRole {
   USER
   ADMIN
@@ -204,4 +285,23 @@ enum InvestmentStatus {
   ACTIVE
   COMPLETED
   CANCELLED
+}
+
+enum SupportThreadStatus {
+  OPEN
+  PENDING
+  RESOLVED
+}
+
+enum SupportMessageDirection {
+  INBOUND
+  OUTBOUND
+  NOTE
+}
+
+enum SupportDeliveryStatus {
+  DELIVERED
+  QUEUED
+  SENT
+  FAILED
 }

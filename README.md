@@ -164,6 +164,25 @@ vercel
 
 ---
 
+## Support Inbox (Resend Receiving)
+
+The admin dashboard includes a Support Inbox for inbound customer emails, assignment, status tracking, private internal notes, threaded replies, and protected attachment downloads. The configured webhook endpoint is:
+
+```text
+https://www.aurexconnect.site/api/webhooks/resend/inbound
+```
+
+In Resend, enable the `email.received` webhook event for the inbox domain and set the receiving address to `support@inbox.aurexconnect.site`. Configure these server-only Vercel environment variables:
+
+- `RESEND_WEBHOOK_SECRET` — the signing secret for this specific Resend webhook endpoint. Keep it server-side; never use a `NEXT_PUBLIC_` prefix.
+- `RESEND_API_KEY` — must be permitted to retrieve received emails and send replies. If your existing key lacks inbound-read access, set `RESEND_INBOUND_API_KEY` to a separate key with the required permission.
+- `SUPPORT_INBOUND_ADDRESS` — defaults to `support@inbox.aurexconnect.site`.
+- `SUPPORT_FROM_EMAIL` — optional reply sender; if omitted, `RESEND_FROM_EMAIL` is used.
+
+Apply the Prisma migration in `prisma/migrations/20261011103000_support_inbox/` to the production database before deploying the inbox UI. Review the target schema first if the support tables were created manually or by another deployment, and back up the database before applying any schema change. Do not use `prisma db push` against production as a substitute for reviewing the migration.
+
+---
+
 ## 🗄️ Database Schema Overview
 
 | Table | Purpose |
@@ -173,6 +192,8 @@ vercel
 | `investments` | Active/completed user investments |
 | `transactions` | All financial movements (deposit, withdraw, profit) |
 | `wallet_addresses` | Admin crypto addresses for deposits |
+| `support_threads` / `support_messages` | Customer conversations, replies, internal notes, and status |
+| `support_attachments` / `support_audit_logs` | Inbound attachment metadata and administrator activity history |
 
 ---
 
