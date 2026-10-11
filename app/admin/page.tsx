@@ -10,11 +10,12 @@ import {
   FileCheck, CheckCircle, XCircle, Eye, Clock,
   TrendingUp, Shield, BarChart3, AlertTriangle, X,
   MinusCircle, Wallet, ListOrdered, ChevronRight,
-  Receipt, ToggleLeft, ToggleRight, Mail, UserCog, KeyRound, Save, Settings, LogOut
+  Receipt, ToggleLeft, ToggleRight, Mail, UserCog, KeyRound, Save, Settings, LogOut, LifeBuoy
 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import SupportInboxTab from './support-inbox'
 
-type Tab = 'overview' | 'deposits' | 'withdrawals' | 'kyc' | 'users' | 'roi' | 'email' | 'settings'
+type Tab = 'overview' | 'deposits' | 'withdrawals' | 'kyc' | 'users' | 'roi' | 'email' | 'settings' | 'support'
 
 // ─────────────────────────────────────────────────────────────────────
 // Shared helpers
@@ -1262,6 +1263,10 @@ export default function AdminPage() {
     if (status === 'authenticated' && session?.user?.role !== 'ADMIN') router.push('/dashboard')
   }, [status, session, router])
 
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('tab') === 'support') setActiveTab('support')
+  }, [])
+
   if (status === 'loading' || status === 'unauthenticated' || session?.user?.role !== 'ADMIN' || !session.user.isActive) return <div className="min-h-screen bg-[#0a0a14] flex items-center justify-center"><div className="w-10 h-10 rounded-full border-2 border-[#c9a84c] border-t-transparent animate-spin" /></div>
 
   const TABS = [
@@ -1272,6 +1277,7 @@ export default function AdminPage() {
     { id: 'users', label: 'Users', icon: Users },
     { id: 'roi', label: 'ROI Engine', icon: TrendingUp },
     { id: 'email', label: 'Email Center', icon: Mail },
+    { id: 'support', label: 'Support Inbox', icon: LifeBuoy },
     { id: 'settings', label: 'Settings', icon: Settings },
   ] as const
 
@@ -1309,6 +1315,7 @@ export default function AdminPage() {
         {activeTab === 'users' && <UsersTab />}
         {activeTab === 'roi' && <RoiTab />}
         {activeTab === 'email' && <EmailTab />}
+        {activeTab === 'support' && <SupportInboxTab />}
         {activeTab === 'settings' && <SettingsTab />}
       </div>
     </div>
