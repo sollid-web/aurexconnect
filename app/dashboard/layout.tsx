@@ -8,6 +8,7 @@ import {
   ListOrdered, Receipt, User, LogOut, TrendingUp,
   Menu, X, ChevronRight, Shield, Bell, FileCheck
 } from 'lucide-react'
+import CryptoTicker from '@/app/components/CryptoTicker'
 
 const NAV = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -164,6 +165,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </div>
           </div>
         </div>
+        <CryptoTicker />
         <div className="p-6">{children}</div>
       </main>
     </div>

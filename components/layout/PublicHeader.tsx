@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Menu, X, TrendingUp } from 'lucide-react'
+import CryptoTicker from '@/app/components/CryptoTicker'
 
 const NAV_LINKS = [
   { label: 'Home',             href: '/' },
@@ -29,34 +30,8 @@ export default function PublicHeader() {
 
   return (
     <>
-      {/* ── Crypto ticker strip ── */}
-      <div className="glass-panel w-full !rounded-none !border-x-0 !border-t-0 overflow-hidden py-2 hidden md:block">
-        <div className="flex items-center gap-8 animate-marquee whitespace-nowrap px-6 text-xs text-gray-400">
-          {[
-            { sym: 'BTC', price: '$67,420', change: '+2.4%', up: true },
-            { sym: 'ETH', price: '$3,512',  change: '+1.8%', up: true },
-            { sym: 'SOL', price: '$178.4',  change: '-0.6%', up: false },
-            { sym: 'BNB', price: '$608.2',  change: '+1.1%', up: true },
-            { sym: 'XRP', price: '$0.612',  change: '+3.2%', up: true },
-            { sym: 'ADA', price: '$0.481',  change: '-1.0%', up: false },
-            { sym: 'LTC', price: '$84.30',  change: '+0.9%', up: true },
-            { sym: 'DOT', price: '$9.142',  change: '+2.1%', up: true },
-            { sym: 'AVAX',price: '$38.72',  change: '-0.4%', up: false },
-            { sym: 'MATIC',price:'$0.891',  change: '+1.5%', up: true },
-          ].concat([ // repeat for seamless scroll
-            { sym: 'BTC', price: '$67,420', change: '+2.4%', up: true },
-            { sym: 'ETH', price: '$3,512',  change: '+1.8%', up: true },
-            { sym: 'SOL', price: '$178.4',  change: '-0.6%', up: false },
-            { sym: 'BNB', price: '$608.2',  change: '+1.1%', up: true },
-          ]).map((coin, i) => (
-            <span key={i} className="inline-flex items-center gap-2 mr-8">
-              <span className="font-bold text-gray-200">{coin.sym}</span>
-              <span>{coin.price}</span>
-              <span className={coin.up ? 'text-green-400' : 'text-red-400'}>{coin.change}</span>
-            </span>
-          ))}
-        </div>
-      </div>
+      {/* ── Global crypto market ticker ── */}
+      <CryptoTicker />
 
       {/* ── Top contact bar ── */}
       <div className="glass-panel hidden md:block !rounded-none !border-x-0 !border-t-0 text-xs text-gray-500 py-2 px-6">
