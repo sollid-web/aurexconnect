@@ -10,11 +10,11 @@ import {
   FileCheck, CheckCircle, XCircle, Eye, Clock,
   TrendingUp, Shield, BarChart3, AlertTriangle, X,
   MinusCircle, Wallet, ListOrdered, ChevronRight,
-  Receipt, ToggleLeft, ToggleRight, Mail, UserCog, KeyRound, Save, Settings, History
+  Receipt, ToggleLeft, ToggleRight, Mail, UserCog, KeyRound, Save, Settings, History, MessageSquare
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
-type Tab = 'overview' | 'deposits' | 'withdrawals' | 'kyc' | 'users' | 'roi' | 'email' | 'settings' | 'audit'
+type Tab = 'overview' | 'deposits' | 'withdrawals' | 'kyc' | 'users' | 'roi' | 'email' | 'settings' | 'audit' | 'support'
 
 // ─────────────────────────────────────────────────────────────────────
 // Shared helpers
@@ -1054,8 +1054,21 @@ function EmailTab() {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// Settings and Audit Tabs
+// Support Inbox, Settings, and Audit Tabs
 // ─────────────────────────────────────────────────────────────────────
+function SupportTab() {
+  const [threads, setThreads] = useState<any[]>([])
+  const [selected, setSelected] = useState<any>(null)
+  const [reply, setReply] = useState('')
+  const [loading, setLoading] = useState(true)
+  const load = useCallback(async () => { try { const response = await fetch('/api/admin/support'); const data = await response.json(); if (!response.ok) throw new Error(data.error); setThreads(data.threads || []); setLoading(false) } catch { toast.error('Support inbox could not be loaded'); setLoading(false) } }, [])
+  useEffect(() => { load() }, [load])
+  const openThread = async (id: string) => { const response = await fetch(`/api/admin/support?threadId=${id}`); const data = await response.json(); if (response.ok) setSelected(data.thread) }
+  const sendReply = async () => { if (!selected || !reply.trim()) return; const response = await fetch('/api/admin/support', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ threadId: selected.id, message: reply }) }); const data = await response.json(); if (!response.ok) return toast.error(data.error || 'Reply failed'); setReply(''); setSelected({ ...selected, messages: [...selected.messages, data.message], status: 'PENDING' }); load(); toast.success('Reply sent') }
+  const changeStatus = async (status: string) => { if (!selected) return; const response = await fetch('/api/admin/support', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ threadId: selected.id, status }) }); if (response.ok) { setSelected({ ...selected, status }); load() } }
+  return <div className="space-y-5"><div><h3 className="font-bold text-xl">Support Inbox</h3><p className="text-gray-500 text-sm mt-1">Receive and reply to customers through inbox.aurexconnect.site.</p></div><div className="grid lg:grid-cols-[320px_1fr] gap-5 min-h-[560px]"><div className="card-dark overflow-y-auto">{loading ? <div className="p-8 flex justify-center"><Spinner /></div> : threads.length === 0 ? <div className="p-8 text-center text-gray-500 text-sm">No inbound messages yet.</div> : threads.map(thread => <button key={thread.id} onClick={() => openThread(thread.id)} className={`w-full text-left p-4 border-b border-[#1e1e35] hover:bg-white/5 ${selected?.id === thread.id ? 'bg-[#c9a84c]/10' : ''}`}><div className="flex items-center justify-between gap-2"><span className="font-semibold text-sm truncate">{thread.senderName || thread.senderEmail}</span><span className="text-[10px] text-[#c9a84c]">{thread.status}</span></div><div className="text-xs text-gray-500 truncate mt-1">{thread.subject}</div><div className="text-[10px] text-gray-600 mt-2">{formatDate(thread.lastMessageAt)}</div></button>)}</div><div className="card-dark p-5 flex flex-col">{!selected ? <div className="m-auto text-center text-gray-500"><MessageSquare size={34} className="mx-auto mb-3 opacity-40" /><p>Select a conversation</p></div> : <><div className="flex items-start justify-between gap-3 border-b border-[#1e1e35] pb-4"><div><h4 className="font-bold">{selected.subject}</h4><p className="text-xs text-gray-500 mt-1">{selected.senderName || selected.senderEmail} · {selected.senderEmail}</p></div><select value={selected.status} onChange={event => changeStatus(event.target.value)} className="rounded-lg border border-[#1e1e35] bg-[#0a0a14] px-2 py-2 text-xs"><option>OPEN</option><option>PENDING</option><option>RESOLVED</option></select></div><div className="flex-1 space-y-4 overflow-y-auto py-5">{selected.messages.map((message: any) => <div key={message.id} className={`max-w-[85%] rounded-xl p-4 text-sm ${message.direction === 'OUTBOUND' ? 'ml-auto bg-[#c9a84c]/15 text-[#f5e5b1]' : 'bg-[#0a0a14] text-gray-300'}`}><div className="text-[10px] uppercase text-gray-500 mb-2">{message.direction} · {formatDate(message.createdAt)}</div><div className="whitespace-pre-wrap">{message.textBody || 'HTML message'}</div></div>)}</div><div className="border-t border-[#1e1e35] pt-4"><textarea value={reply} onChange={event => setReply(event.target.value)} rows={4} placeholder="Write a reply..." className="w-full rounded-xl border border-[#1e1e35] bg-[#0a0a14] p-3 text-sm text-white" /><button onClick={sendReply} disabled={!reply.trim()} className="btn-gold mt-3 rounded-xl px-5 py-2.5 text-sm disabled:opacity-50">Send reply</button></div></>}</div></div></div>
+}
+
 function SettingsTab() {
   const [settings, setSettings] = useState<Record<string, any>>({})
   const [methods, setMethods] = useState<any[]>([])
@@ -1164,6 +1177,7 @@ export default function AdminPage() {
     { id: 'users', label: 'Users', icon: Users },
     { id: 'roi', label: 'ROI Engine', icon: TrendingUp },
     { id: 'email', label: 'Email Center', icon: Mail },
+    { id: 'support', label: 'Support Inbox', icon: MessageSquare },
     { id: 'settings', label: 'Settings', icon: Settings },
     { id: 'audit', label: 'Audit Logs', icon: History },
   ] as const
@@ -1197,6 +1211,7 @@ export default function AdminPage() {
         {activeTab === 'users' && <UsersTab />}
         {activeTab === 'roi' && <RoiTab />}
         {activeTab === 'email' && <EmailTab />}
+        {activeTab === 'support' && <SupportTab />}
         {activeTab === 'settings' && <SettingsTab />}
         {activeTab === 'audit' && <AuditTab />}
       </div>

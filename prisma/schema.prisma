@@ -33,6 +33,9 @@ model User {
   notifications       Notification[]
   transactions        Transaction[]
   passwordResetTokens PasswordResetToken[]
+  support_audit_logs  support_audit_logs[]
+  support_messages    SupportMessage[]
+  support_threads     SupportThread[]
 
   @@map("users")
 }
@@ -258,4 +261,99 @@ model PaymentMethod {
 
   @@index([isActive, displayOrder])
   @@map("payment_methods")
+}
+
+model SupportThread {
+  id                 String               @id @default(cuid())
+  senderEmail        String
+  senderName         String?
+  subject            String
+  status             SupportThreadStatus  @default(OPEN)
+  assignedAdminId    String?
+  lastMessageAt      DateTime             @default(now())
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  support_audit_logs support_audit_logs[]
+  messages           SupportMessage[]
+  users              User?                @relation(fields: [assignedAdminId], references: [id])
+
+  @@index([status, lastMessageAt])
+  @@index([assignedAdminId, status])
+  @@index([senderEmail])
+  @@map("support_threads")
+}
+
+model SupportMessage {
+  id                  String                  @id @default(cuid())
+  threadId            String
+  direction           SupportMessageDirection
+  deliveryStatus      SupportDeliveryStatus   @default(DELIVERED)
+  providerEmailId     String?                 @unique
+  idempotencyKey      String?                 @unique
+  internetMessageId   String?
+  inReplyTo           String?
+  fromAddress         String
+  toAddress           String?
+  emailSubject        String?
+  replyHeaders        Json?
+  textBody            String
+  authorAdminId       String?
+  createdAt           DateTime                @default(now())
+  support_attachments support_attachments[]
+  users               User?                   @relation(fields: [authorAdminId], references: [id])
+  thread              SupportThread           @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@index([threadId, createdAt])
+  @@index([inReplyTo])
+  @@index([internetMessageId])
+  @@map("support_messages")
+}
+
+model support_attachments {
+  id                   String         @id
+  messageId            String
+  providerAttachmentId String
+  filename             String
+  contentType          String?
+  contentDisposition   String?
+  contentId            String?
+  size                 Int?
+  createdAt            DateTime       @default(now())
+  support_messages     SupportMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, providerAttachmentId])
+  @@index([messageId])
+}
+
+model support_audit_logs {
+  id              String        @id
+  threadId        String
+  actorAdminId    String?
+  action          String
+  details         String?
+  createdAt       DateTime      @default(now())
+  users           User?         @relation(fields: [actorAdminId], references: [id])
+  support_threads SupportThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@index([actorAdminId, createdAt])
+  @@index([threadId, createdAt])
+}
+
+enum SupportThreadStatus {
+  OPEN
+  PENDING
+  RESOLVED
+}
+
+enum SupportMessageDirection {
+  INBOUND
+  OUTBOUND
+  NOTE
+}
+
+enum SupportDeliveryStatus {
+  DELIVERED
+  QUEUED
+  SENT
+  FAILED
 }
