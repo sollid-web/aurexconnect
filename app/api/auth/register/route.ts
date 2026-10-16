@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs'
 import { randomBytes, createHash } from 'crypto'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
-import { sendEmail, verificationEmail } from '@/lib/email'
+import { referralSignupEmail, sendEmail, verificationEmail } from '@/lib/email'
 import { rateLimit, requestIp } from '@/lib/rate-limit'
 import { isSettingEnabled } from '@/lib/settings'
 
@@ -26,11 +26,15 @@ export async function POST(req: NextRequest) {
     const existingUser = await prisma.user.findUnique({ where: { email } })
     if (existingUser) return NextResponse.json({ error: 'Email already registered' }, { status: 400 })
 
-    let referredBy: string | undefined
+    let referrer: { id: string; email: string; fullName: string } | null = null
     if (data.referralCode) {
-      const referrer = await prisma.user.findFirst({ where: { referralCode: data.referralCode } })
-      if (referrer) referredBy = referrer.id
+      referrer = await prisma.user.findFirst({
+        where: { OR: [{ referralCode: data.referralCode }, { id: data.referralCode }] },
+        select: { id: true, email: true, fullName: true },
+      })
+      if (referrer?.email.toLowerCase() === email) referrer = null
     }
+    const referredBy = referrer?.id
 
     const hashedPassword = await bcrypt.hash(data.password, 12)
     const verificationToken = randomBytes(32).toString('hex')
@@ -47,6 +51,11 @@ export async function POST(req: NextRequest) {
       },
       select: { id: true, email: true, fullName: true, role: true },
     })
+    if (referrer) {
+      await sendEmail(referrer.email, referralSignupEmail(referrer.fullName, user.fullName)).catch(error => {
+        console.error('[Referral signup email]', error)
+      })
+    }
 
     if (process.env.REQUIRE_EMAIL_VERIFICATION !== 'false') {
       await prisma.passwordResetToken.create({

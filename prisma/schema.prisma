@@ -37,6 +37,7 @@ model User {
   support_messages    SupportMessage[]
   support_threads     SupportThread[]
 
+  @@index([referredBy])
   @@map("users")
 }
 
@@ -156,16 +157,16 @@ model Notification {
 }
 
 model AdminAuditLog {
-  id           String   @id @default(cuid())
-  adminId      String
-  targetUserId String
-  action       String
-  details      String?
+  id            String   @id @default(cuid())
+  adminId       String
+  targetUserId  String
+  action        String
+  details       String?
   previousValue String?
   newValue      String?
   ipAddress     String?
   userAgent     String?
-  createdAt    DateTime @default(now())
+  createdAt     DateTime @default(now())
 
   @@index([adminId, createdAt])
   @@index([targetUserId, createdAt])

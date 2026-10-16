@@ -35,6 +35,13 @@ export function welcomeEmail(name: string): EmailMessage {
   return { subject: 'Welcome to AurexConnect', html: layout('Welcome to AurexConnect', `${heading('Your account is almost ready')}${paragraph(`Hi ${escapeHtml(name)}, thank you for joining AurexConnect. Verify your email to continue to your investor dashboard.`)}<p style="margin:28px 0">${button('Visit AurexConnect', `${APP_URL}/auth/login`)}</p>`, 'Welcome to AurexConnect. Verify your email to continue.') }
 }
 
+export function referralSignupEmail(referrerName: string, referredUserName: string): EmailMessage {
+  return {
+    subject: 'Someone joined AurexConnect using your referral link',
+    html: layout('New referral signup', `${heading('You have a new referral')}${paragraph(`Hi ${escapeHtml(referrerName)}, ${escapeHtml(referredUserName)} just created an AurexConnect account using your referral link.`)}${panel('<strong>Status:</strong> Account created<br><strong>Next step:</strong> Referral rewards apply when the referred investor completes a qualifying investment.')}${paragraph('You can review your referral activity from your dashboard.') }<p style="margin:28px 0">${button('View dashboard', `${APP_URL}/dashboard`)}</p>`, 'A new user joined through your AurexConnect referral link.')
+  }
+}
+
 export function depositSubmittedEmail(name: string, amount: number, currency: string): EmailMessage {
   return { subject: 'Deposit submitted for review', html: layout('Deposit submitted', `${heading('Deposit received')}${paragraph(`Hi ${escapeHtml(name)}, your deposit request has been submitted for review.`)}${panel(`<strong>Amount:</strong> ${money(amount)}<br><strong>Currency:</strong> ${escapeHtml(currency)}<br><strong>Status:</strong> Pending review`)}${paragraph('We will notify you once the transaction has been reviewed by our operations team.')}`, 'Your deposit request has been submitted for review.') }
 }

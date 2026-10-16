@@ -15,7 +15,8 @@ export async function GET() {
     if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     const session = auth.session
 
-    const user = await prisma.user.findUnique({
+    const [user, referredUsers] = await Promise.all([
+      prisma.user.findUnique({
       where: { id: session.user.id },
       select: {
         id: true,
@@ -42,11 +43,18 @@ export async function GET() {
           take: 10,
         },
       },
-    })
+      }),
+      prisma.user.findMany({
+        where: { referredBy: session.user.id },
+        select: { id: true, email: true, fullName: true, createdAt: true },
+        orderBy: { createdAt: 'desc' },
+        take: 100,
+      }),
+    ])
 
     if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 })
 
-    return NextResponse.json(user)
+    return NextResponse.json({ ...user, referrals: { count: referredUsers.length, users: referredUsers } })
   } catch (error) {
     return NextResponse.json({ error: 'Failed to fetch user data' }, { status: 500 })
   }
