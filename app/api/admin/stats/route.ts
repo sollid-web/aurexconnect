@@ -16,6 +16,7 @@ export async function GET() {
     depositStats,
     withdrawalStats,
     profitStats,
+    apxRewardStats,
   ] = await Promise.all([
     prisma.user.count(),
     prisma.transaction.count({ where: { type: 'DEPOSIT', status: 'PENDING' } }),
@@ -23,15 +24,19 @@ export async function GET() {
     prisma.kycSubmission.count({ where: { status: 'PENDING' } }),
     prisma.investment.count({ where: { status: 'ACTIVE' } }),
     prisma.transaction.aggregate({
-      where: { type: 'DEPOSIT', status: 'APPROVED' },
+      where: { type: 'DEPOSIT', status: 'APPROVED', currency: { not: 'APX' } },
       _sum: { amount: true },
     }),
     prisma.transaction.aggregate({
-      where: { type: 'WITHDRAWAL', status: 'APPROVED' },
+      where: { type: 'WITHDRAWAL', status: 'APPROVED', currency: { not: 'APX' } },
       _sum: { amount: true },
     }),
     prisma.transaction.aggregate({
-      where: { type: 'PROFIT', status: 'COMPLETED' },
+      where: { type: 'PROFIT', status: 'COMPLETED', currency: { not: 'APX' } },
+      _sum: { amount: true },
+    }),
+    prisma.transaction.aggregate({
+      where: { type: 'PROFIT', status: 'COMPLETED', currency: 'APX' },
       _sum: { amount: true },
     }),
   ])
@@ -45,5 +50,6 @@ export async function GET() {
     totalDeposits: depositStats._sum.amount ?? 0,
     totalWithdrawals: withdrawalStats._sum.amount ?? 0,
     totalProfit: profitStats._sum.amount ?? 0,
+    totalApxRewards: apxRewardStats._sum.amount ?? 0,
   })
 }

@@ -15,9 +15,11 @@ model User {
   phone               String?
   country             String?
   role                UserRole             @default(USER)
-  balance             Float                @default(0)
+  balance             Float                @default(0) // USD cash/principal balance
+  apxBalance          Float                @default(0) // APX token units in the internal ledger
   totalDeposited      Float                @default(0)
-  totalProfit         Float                @default(0)
+  totalProfit         Float                @default(0) // Historical USD-denominated profit credits
+  totalApxEarned      Float                @default(0) // APX token units earned to the internal ledger
   totalWithdrawn      Float                @default(0)
   referralCode        String               @unique @default(cuid())
   referredBy          String?
@@ -76,8 +78,9 @@ model Investment {
   userId         String
   planId         String
   amount         Float
-  expectedProfit Float
-  roiPaid        Float            @default(0)
+  expectedProfit Float // USD ROI basis; not a dollar payout amount at maturity
+  roiPaid        Float            @default(0) // USD ROI basis settled; legacy installments may have been paid in USD
+  apxPaid        Float            @default(0) // APX token units credited to the internal ledger
   lastRoiPaidAt  DateTime?
   status         InvestmentStatus @default(ACTIVE)
   startDate      DateTime         @default(now())
@@ -190,7 +193,8 @@ model RoiProcessingLog {
   processedAt      DateTime @default(now())
   investmentsFound Int
   investmentsDone  Int
-  totalProfitPaid  Float
+  totalProfitPaid  Float // USD ROI basis in new runs; legacy rows record USD ROI paid
+  totalApxPaid     Float    @default(0) // APX token units credited in the run
   errors           String?
 
   @@map("roi_processing_logs")

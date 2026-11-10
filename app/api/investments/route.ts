@@ -6,6 +6,7 @@ import { createNotification } from '@/lib/notifications'
 import { addDays } from 'date-fns'
 import { z } from 'zod'
 import { investmentActivatedEmail, sendEmail } from '@/lib/email'
+import { usdToApx } from '@/lib/apx'
 
 const investSchema = z.object({
   planId: z.string().min(1, 'Plan is required'),
@@ -45,6 +46,7 @@ export async function POST(req: NextRequest) {
     }
 
     const expectedProfit = parseFloat(((amount * plan.roiPercent) / 100).toFixed(2))
+    const estimatedApxReward = usdToApx(expectedProfit)
     const endDate = addDays(new Date(), plan.durationDays)
 
     // Atomic: create investment + deduct balance + record transaction
@@ -78,7 +80,7 @@ export async function POST(req: NextRequest) {
     await createNotification(
       user.id,
       '🚀 Investment Activated',
-      `Your $${amount.toFixed(2)} investment in the ${plan.name} is now active. Your total ROI of $${expectedProfit.toFixed(2)} will be credited in daily installments over ${plan.durationDays} day(s).`,
+      `Your $${amount.toFixed(2)} USD principal is invested in ${plan.name}. At maturity, the principal returns to your USD balance and the $${expectedProfit.toFixed(2)} USD ROI basis converts to an estimated ${estimatedApxReward.toFixed(8)} APX at the published $0.00072/APX rate. APX is credited to the internal APX wallet ledger; no on-chain transfer is made.`,
       'success',
       '/dashboard'
     )
@@ -89,6 +91,7 @@ export async function POST(req: NextRequest) {
         message: 'Investment created successfully',
         investment,
         expectedProfit,
+        estimatedApxReward,
         endDate,
       },
       { status: 201 }

@@ -7,6 +7,7 @@ import { balanceAdjustmentEmail, investmentActivatedEmail, passwordResetEmail, s
 import { createHash, randomBytes } from 'crypto'
 import { z } from 'zod'
 import bcrypt from 'bcryptjs'
+import { usdToApx } from '@/lib/apx'
 
 async function audit(adminId: string, targetUserId: string, action: string, details?: string) {
   await prisma.adminAuditLog.create({ data: { adminId, targetUserId, action, details } }).catch(error => console.error('[Admin audit]', error))
@@ -330,7 +331,8 @@ export async function PATCH(req: NextRequest) {
       )
     }
 
-    const expectedProfit = (investmentAmount * plan.roiPercent) / 100
+    const expectedProfit = Number(((investmentAmount * plan.roiPercent) / 100).toFixed(2))
+    const estimatedApxReward = usdToApx(expectedProfit)
     const endDate = addDays(new Date(), plan.durationDays)
 
     const ops: any[] = [
@@ -371,7 +373,7 @@ export async function PATCH(req: NextRequest) {
     await createNotification(
       userId,
       '🚀 Investment Activated',
-      `An investment of $${investmentAmount.toFixed(2)} in the ${plan.name} has been activated on your account. Total ROI of $${expectedProfit.toFixed(2)} will be credited in daily installments over ${plan.durationDays} day(s).`,
+      `An investment of $${investmentAmount.toFixed(2)} USD principal in ${plan.name} has been activated. At maturity, the principal returns to your USD balance and the $${expectedProfit.toFixed(2)} USD ROI basis converts to an estimated ${estimatedApxReward.toFixed(8)} APX at the published $0.00072/APX rate. APX is credited to the internal APX wallet ledger; no on-chain transfer is made.`,
       'success',
       '/dashboard'
     )
@@ -381,6 +383,7 @@ export async function PATCH(req: NextRequest) {
       message: `${plan.name} investment of $${investmentAmount} assigned to ${user.fullName}`,
       investment,
       expectedProfit,
+      estimatedApxReward,
       endDate,
     })
   }

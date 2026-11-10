@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import { formatCurrency, formatDate, getStatusColor } from '@/lib/utils'
 import { Receipt } from 'lucide-react'
+import { formatApx } from '@/lib/apx'
 
 export default function TransactionsPage() {
   const [transactions, setTransactions] = useState<any[]>([])
@@ -59,7 +60,7 @@ export default function TransactionsPage() {
                 {filtered.map((tx: any) => (
                   <tr key={tx.id} className="hover:bg-white/2 transition-colors">
                     <td className="px-6 py-4 text-sm font-medium capitalize">{tx.type.replace(/_/g,' ').toLowerCase()}</td>
-                    <td className="px-6 py-4 text-sm font-bold">{formatCurrency(tx.amount)}</td>
+                    <td className="px-6 py-4 text-sm font-bold">{tx.currency === 'APX' ? formatApx(tx.amount) : formatCurrency(tx.amount)}</td>
                     <td className="px-6 py-4">
                       <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${getStatusColor(tx.status)}`}>
                         {tx.status}

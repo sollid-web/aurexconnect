@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { Activity, ArrowDownLeft, ArrowUpRight, CheckCircle2, Clock3, TrendingUp, Users } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/lib/utils'
+import { formatApx } from '@/lib/apx'
 
 type ActivityEvent = {
   id: string
@@ -19,7 +20,7 @@ type ActivityResponse = {
   available: boolean
   source?: 'live'
   updatedAt?: string
-  metrics: { transactionsLast24h: number; volumeLast24h: number; activeInvestments: number } | null
+  metrics: { transactionsLast24h: number; volumeLast24h: number; apxRewardsLast24h: number; activeInvestments: number } | null
   events: ActivityEvent[]
 }
 
@@ -69,7 +70,8 @@ export default function LiveActivityFeed() {
         <div className="grid sm:grid-cols-3 gap-3 mb-6">
           {[
             { label: 'Verified events · 24h', value: metrics ? metrics.transactionsLast24h.toLocaleString() : '—', icon: Activity },
-            { label: 'Recorded volume · 24h', value: metrics ? formatCurrency(metrics.volumeLast24h) : '—', icon: TrendingUp },
+            { label: 'Recorded USD volume · 24h', value: metrics ? formatCurrency(metrics.volumeLast24h) : '—', icon: TrendingUp },
+            { label: 'APX rewards · 24h', value: metrics ? formatApx(metrics.apxRewardsLast24h) : '—', icon: TrendingUp },
             { label: 'Active investments', value: metrics ? metrics.activeInvestments.toLocaleString() : '—', icon: Users },
           ].map(({ label, value, icon: Icon }) => (
             <div key={label} className="rounded-xl border border-[#1e1e35] bg-[#12121f] p-4 flex items-center gap-3">
@@ -90,7 +92,7 @@ export default function LiveActivityFeed() {
                 <div key={event.id} className="px-5 py-4 flex items-center gap-3">
                   <div className="w-9 h-9 rounded-full bg-white/5 flex items-center justify-center flex-shrink-0"><EventIcon type={event.type} /></div>
                   <div className="min-w-0 flex-1"><div className="text-sm text-gray-200 truncate"><span className="font-semibold">{event.name}</span> {event.label}</div><div className="text-xs text-gray-500 mt-1">{event.country ? `${event.country} · ` : ''}{formatDate(event.createdAt)}</div></div>
-                  <div className="text-right flex-shrink-0"><div className="font-bold text-sm text-white">{formatCurrency(event.amount)}</div><div className="text-[10px] uppercase tracking-wide text-emerald-300">verified</div></div>
+                  <div className="text-right flex-shrink-0"><div className="font-bold text-sm text-white">{event.currency === 'APX' ? formatApx(event.amount) : formatCurrency(event.amount)}</div><div className="text-[10px] uppercase tracking-wide text-emerald-300">verified</div></div>
                 </div>
               ))}
             </div>

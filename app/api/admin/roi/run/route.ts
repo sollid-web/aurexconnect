@@ -22,7 +22,7 @@ export async function POST() {
       adminId: auth.user.id,
       targetUserId: auth.user.id,
       action: 'TRIGGER_ROI_ENGINE',
-      details: `status=${response.status} · processed=${data.investmentsDone ?? 0} · paid=${data.totalProfitPaid ?? 0}`,
+      details: `status=${response.status} · processed=${data.investmentsDone ?? 0} · USD profit basis=${data.totalProfitBasisUsd ?? 0} · APX credited=${data.totalApxPaid ?? 0}`,
     },
   })
   return NextResponse.json(data, { status: response.status })

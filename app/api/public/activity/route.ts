@@ -45,7 +45,7 @@ export async function GET() {
   const eligibleStatuses = ['APPROVED', 'COMPLETED'] as const
 
   try {
-    const [events, recentMetrics, activeInvestments] = await Promise.all([
+    const [events, recentMetrics, apxRewards, activeInvestments] = await Promise.all([
       prisma.transaction.findMany({
         where: { type: { in: [...eligibleTypes] }, status: { in: [...eligibleStatuses] }, createdAt: { gte: eventSince } },
         select: { id: true, type: true, amount: true, currency: true, createdAt: true, user: { select: { fullName: true, country: true } } },
@@ -53,8 +53,12 @@ export async function GET() {
         take: 12,
       }),
       prisma.transaction.aggregate({
-        where: { type: { in: [...eligibleTypes] }, status: { in: [...eligibleStatuses] }, createdAt: { gte: since } },
+        where: { type: { in: [...eligibleTypes] }, status: { in: [...eligibleStatuses] }, currency: { not: 'APX' }, createdAt: { gte: since } },
         _count: { _all: true },
+        _sum: { amount: true },
+      }),
+      prisma.transaction.aggregate({
+        where: { type: 'PROFIT', status: { in: [...eligibleStatuses] }, currency: 'APX', createdAt: { gte: since } },
         _sum: { amount: true },
       }),
       prisma.investment.count({ where: { status: 'ACTIVE' } }),
@@ -69,6 +73,7 @@ export async function GET() {
       metrics: {
         transactionsLast24h: recentMetrics._count._all,
         volumeLast24h: Number((recentMetrics._sum.amount || 0).toFixed(2)),
+        apxRewardsLast24h: apxRewards._sum.amount ?? 0,
         activeInvestments,
       },
       events: events.map(event => ({

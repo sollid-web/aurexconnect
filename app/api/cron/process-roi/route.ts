@@ -1,17 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { createNotification, Notifs } from '@/lib/notifications'
-import { dailyRoiEmail, referralBonusEmail, sendEmail } from '@/lib/email'
+import { apxMaturityEmail, referralBonusEmail, sendEmail } from '@/lib/email'
 import { calculateRoiCredit } from '@/lib/roi'
 import { isSettingEnabled } from '@/lib/settings'
+import { APX_CONTRACT, APX_SYMBOL, USD_PER_APX, usdToApx } from '@/lib/apx'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 /**
- * Daily ROI engine. Vercel invokes this route once per day. Each investment
- * is paid only for completed 24-hour installments, so missed runs catch up
- * safely and repeated calls remain idempotent.
+ * Daily maturity processor. Vercel invokes this route once per day; investments
+ * are finalized only after maturity, returning USD principal and converting
+ * the outstanding USD ROI basis to APX. Compare-and-swap keeps runs idempotent.
  */
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get('authorization')
@@ -23,7 +24,8 @@ export async function GET(req: NextRequest) {
   const startTime = Date.now()
   let investmentsFound = 0
   let investmentsDone = 0
-  let totalProfitPaid = 0
+  let totalProfitBasisUsd = 0
+  let totalApxPaid = 0
   const errors: string[] = []
 
   if (!await isSettingEnabled('roi_enabled', true)) return NextResponse.json({ success: true, skipped: true, reason: 'ROI engine disabled by administrator' })
@@ -57,34 +59,42 @@ export async function GET(req: NextRequest) {
           })
           if (!calculation) return null
           const { roiDue, nextRoiPaid, shouldComplete, creditAmount } = calculation
+          const apxDue = usdToApx(roiDue)
 
-          await tx.investment.update({
-            where: { id: current.id },
+          // Claim this maturity with compare-and-swap. A scheduled run and an
+          // administrator-triggered run can overlap; only one may finalize the
+          // investment from the observed roiPaid value.
+          const claimed = await tx.investment.updateMany({
+            where: { id: current.id, status: 'ACTIVE', roiPaid: current.roiPaid },
             data: {
               roiPaid: nextRoiPaid,
+              apxPaid: { increment: apxDue },
               lastRoiPaidAt: roiDue > 0 ? now : current.lastRoiPaidAt,
               ...(shouldComplete ? { status: 'COMPLETED', completedAt: now } : {}),
             },
           })
+          if (claimed.count !== 1) return null
 
-          if (creditAmount > 0) {
-            await tx.user.update({
-              where: { id: current.userId },
-              data: {
-                balance: { increment: creditAmount },
-                totalProfit: { increment: roiDue },
-              },
-            })
-          }
+          await tx.user.update({
+            where: { id: current.userId },
+            data: {
+              balance: { increment: creditAmount },
+              ...(apxDue > 0 ? {
+                apxBalance: { increment: apxDue },
+                totalApxEarned: { increment: apxDue },
+              } : {}),
+            },
+          })
 
-          if (roiDue > 0) {
+          if (apxDue > 0) {
             await tx.transaction.create({
               data: {
                 userId: current.userId,
                 type: 'PROFIT',
                 status: 'COMPLETED',
-                amount: roiDue,
-                note: `${shouldComplete ? 'Final ' : 'Daily '}ROI from ${current.plan.name}`,
+                amount: apxDue,
+                currency: APX_SYMBOL,
+                note: `Maturity ROI from ${current.plan.name}: $${roiDue.toFixed(2)} USD basis converted at $${USD_PER_APX}/${APX_SYMBOL}; internal APX wallet credit. Contract ${APX_CONTRACT}`,
               },
             })
           }
@@ -104,7 +114,9 @@ export async function GET(req: NextRequest) {
             user: { id: current.userId, email: current.user.email, fullName: current.user.fullName },
             planName: current.plan.name,
             roiDue,
-            totalPaid: nextRoiPaid,
+            apxAmount: apxDue,
+            totalApxPaid: Number((current.apxPaid + apxDue).toFixed(8)),
+            principalUsd: shouldComplete ? creditAmount : 0,
             expectedProfit: current.expectedProfit,
             matured: shouldComplete,
             referral,
@@ -113,12 +125,13 @@ export async function GET(req: NextRequest) {
 
         if (!result) continue
         investmentsDone++
-        totalProfitPaid += result.roiDue
+        totalProfitBasisUsd += result.roiDue
+        totalApxPaid += result.apxAmount
 
-        if (result.roiDue > 0 || result.matured) {
-          const notification = Notifs.dailyRoi(result.roiDue, result.planName, result.matured)
+        if (result.matured) {
+          const notification = Notifs.apxMaturity(result.apxAmount, result.principalUsd, result.planName, result.roiDue)
           await createNotification(result.user.id, notification.title, notification.message, notification.type, notification.link)
-          if (await isSettingEnabled('roi_email_enabled', true)) await sendEmail(result.user.email, dailyRoiEmail(result.user.fullName, result.planName, result.roiDue, result.totalPaid, result.expectedProfit, result.matured)).catch(error => console.error('[ROI email]', error))
+          if (await isSettingEnabled('roi_email_enabled', true)) await sendEmail(result.user.email, apxMaturityEmail(result.user.fullName, result.planName, result.principalUsd, result.roiDue, result.apxAmount, result.totalApxPaid)).catch(error => console.error('[ROI email]', error))
         }
         if (result.referral) {
           const referralNotification = Notifs.referralBonus(result.referral.amount)
@@ -132,11 +145,11 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    await prisma.roiProcessingLog.create({ data: { investmentsFound, investmentsDone, totalProfitPaid, errors: errors.length ? errors.join('\n') : null } })
-    return NextResponse.json({ success: true, investmentsFound, investmentsDone, totalProfitPaid, durationMs: Date.now() - startTime, errors: errors.length ? errors : undefined })
+    await prisma.roiProcessingLog.create({ data: { investmentsFound, investmentsDone, totalProfitPaid: totalProfitBasisUsd, totalApxPaid, errors: errors.length ? errors.join('\n') : null } })
+    return NextResponse.json({ success: true, investmentsFound, investmentsDone, totalProfitBasisUsd, totalApxPaid, durationMs: Date.now() - startTime, errors: errors.length ? errors : undefined })
   } catch (error: any) {
     console.error('[ROI Engine] Fatal error:', error)
-    await prisma.roiProcessingLog.create({ data: { investmentsFound, investmentsDone, totalProfitPaid, errors: `Fatal: ${error.message}` } })
+    await prisma.roiProcessingLog.create({ data: { investmentsFound, investmentsDone, totalProfitPaid: totalProfitBasisUsd, totalApxPaid, errors: `Fatal: ${error.message}` } })
     return NextResponse.json({ error: 'ROI engine failed' }, { status: 500 })
   }
 }

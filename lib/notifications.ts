@@ -76,11 +76,9 @@ export const Notifs = {
     type: 'success' as NotifType,
     link: '/dashboard',
   }),
-  dailyRoi: (amount: number, planName: string, matured: boolean) => ({
-    title: matured ? '✅ Investment Matured' : '💰 Daily ROI Credited',
-    message: matured
-      ? `Your ${planName} investment has matured. ${amount > 0 ? `$${amount.toFixed(2)} final ROI` : 'Final ROI'} and your principal have been credited to your balance.`
-      : `$${amount.toFixed(2)} daily ROI from your ${planName} investment has been credited to your balance.`,
+  apxMaturity: (apxAmount: number, principalUsd: number, planName: string, roiBasisUsd: number) => ({
+    title: '✅ Investment Matured',
+    message: `Your ${planName} investment matured. $${principalUsd.toFixed(2)} USD principal was returned to your USD balance. ${apxAmount.toFixed(8)} APX was credited to your internal APX wallet for $${roiBasisUsd.toFixed(2)} USD profit basis. No on-chain transfer was made.`,
     type: 'success' as NotifType,
     link: '/dashboard',
   }),

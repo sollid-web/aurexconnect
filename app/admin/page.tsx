@@ -4,6 +4,7 @@ import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { formatCurrency, formatDate, getStatusColor } from '@/lib/utils'
 import { durationLabel, formatUsd } from '@/lib/plans'
+import { formatApx, usdToApx } from '@/lib/apx'
 import {
   Users, DollarSign, ArrowUpCircle, ArrowDownCircle,
   Search, UserCheck, UserX, PlusCircle, Loader2,
@@ -211,6 +212,8 @@ function UserDrawer({ userId, onClose, onRefresh }: { userId: string; onClose: (
   }
 
   const selectedPlan = plans.find(p => p.id === investPlanId)
+  const investmentPreviewUsd = selectedPlan ? Number(((Number(investAmount) * selectedPlan.roiPercent) / 100).toFixed(2)) : 0
+  const investmentPreviewApx = usdToApx(investmentPreviewUsd)
 
   return (
     <div className="fixed inset-0 z-50 flex">
@@ -260,12 +263,14 @@ function UserDrawer({ userId, onClose, onRefresh }: { userId: string; onClose: (
               </div>
 
               {/* Balance grid */}
-              <div className="grid grid-cols-4 gap-3 mt-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-4">
                 {[
-                  { label: 'Balance', value: formatCurrency(user?.balance || 0), color: '#c9a84c' },
-                  { label: 'Deposited', value: formatCurrency(user?.totalDeposited || 0), color: '#60a5fa' },
-                  { label: 'Profit', value: formatCurrency(user?.totalProfit || 0), color: '#34d399' },
-                  { label: 'Withdrawn', value: formatCurrency(user?.totalWithdrawn || 0), color: '#f87171' },
+                  { label: 'USD Balance', value: formatCurrency(user?.balance || 0), color: '#c9a84c' },
+                  { label: 'APX Wallet', value: formatApx(user?.apxBalance || 0), color: '#34d399' },
+                  { label: 'USD Deposited', value: formatCurrency(user?.totalDeposited || 0), color: '#60a5fa' },
+                  { label: 'Historical USD Profit', value: formatCurrency(user?.totalProfit || 0), color: '#a78bfa' },
+                  { label: 'APX Earned', value: formatApx(user?.totalApxEarned || 0), color: '#2dd4bf' },
+                  { label: 'USD Withdrawn', value: formatCurrency(user?.totalWithdrawn || 0), color: '#f87171' },
                 ].map(s => (
                   <div key={s.label} className="bg-[#12121f] border border-[#1e1e35] rounded-xl p-3 text-center">
                     <div className="text-xs text-gray-500 mb-1">{s.label}</div>
@@ -303,7 +308,7 @@ function UserDrawer({ userId, onClose, onRefresh }: { userId: string; onClose: (
                 {[
                   { id: 'credit', label: 'Credit Balance', icon: PlusCircle, color: '#34d399', bg: 'bg-green-400/10 border-green-400/20 hover:bg-green-400/15', active: 'bg-green-400/20 border-green-400/40 text-green-400' },
                   { id: 'debit', label: 'Debit Balance', icon: MinusCircle, color: '#f87171', bg: 'bg-red-400/10 border-red-400/20 hover:bg-red-400/15', active: 'bg-red-400/20 border-red-400/40 text-red-400' },
-                  { id: 'profit', label: 'Adjust Profit', icon: TrendingUp, color: '#34d399', bg: 'bg-emerald-400/10 border-emerald-400/20 hover:bg-emerald-400/15', active: 'bg-emerald-400/20 border-emerald-400/40 text-emerald-400' },
+                  { id: 'profit', label: 'Adjust USD Profit', icon: TrendingUp, color: '#34d399', bg: 'bg-emerald-400/10 border-emerald-400/20 hover:bg-emerald-400/15', active: 'bg-emerald-400/20 border-emerald-400/40 text-emerald-400' },
                   { id: 'invest', label: 'Assign Plan', icon: TrendingUp, color: '#c9a84c', bg: 'bg-[#c9a84c]/10 border-[#c9a84c]/20 hover:bg-[#c9a84c]/15', active: 'bg-[#c9a84c]/20 border-[#c9a84c]/40 text-[#c9a84c]' },
                 ].map(btn => {
                   const Icon = btn.icon
@@ -366,8 +371,8 @@ function UserDrawer({ userId, onClose, onRefresh }: { userId: string; onClose: (
 
                 {activeAction === 'profit' && (
                   <div className="space-y-4">
-                    <h3 className="font-semibold text-sm flex items-center gap-2"><TrendingUp size={15} className="text-emerald-400" />Adjust Recorded Profit <span className="text-gray-500 font-normal">→ {user?.fullName}</span></h3>
-                    <p className="text-xs leading-relaxed text-gray-500">Profit adjustments also update the available balance and create an audited transaction. Use this only for corrections or approved manual rewards.</p>
+                    <h3 className="font-semibold text-sm flex items-center gap-2"><TrendingUp size={15} className="text-emerald-400" />Adjust Historical USD Profit <span className="text-gray-500 font-normal">→ {user?.fullName}</span></h3>
+                    <p className="text-xs leading-relaxed text-gray-500">This USD-only adjustment also updates the USD balance and creates an audited transaction. It does not change the APX wallet or maturity rewards.</p>
                     <div className="grid grid-cols-2 gap-3">
                       <button onClick={() => setProfitDirection('credit')} className={`rounded-xl border px-3 py-2.5 text-sm font-semibold ${profitDirection === 'credit' ? 'border-emerald-400/40 bg-emerald-400/15 text-emerald-300' : 'border-[#1e1e35] text-gray-500'}`}>Credit profit</button>
                       <button onClick={() => setProfitDirection('debit')} className={`rounded-xl border px-3 py-2.5 text-sm font-semibold ${profitDirection === 'debit' ? 'border-red-400/40 bg-red-400/15 text-red-300' : 'border-[#1e1e35] text-gray-500'}`}>Reverse profit</button>
@@ -427,13 +432,16 @@ function UserDrawer({ userId, onClose, onRefresh }: { userId: string; onClose: (
                     {investAmount && selectedPlan && parseFloat(investAmount) > 0 && (
                       <div className="bg-[#12121f] border border-[#1e1e35] rounded-xl p-3 text-xs space-y-2">
                         <div className="flex justify-between text-gray-400">
-                          <span>Investment</span><span className="text-white font-bold">{formatCurrency(parseFloat(investAmount))}</span>
+                          <span>USD Principal</span><span className="text-white font-bold">{formatCurrency(parseFloat(investAmount))}</span>
                         </div>
                         <div className="flex justify-between text-gray-400">
-                          <span>Expected Profit</span><span className="text-green-400 font-bold">+{formatCurrency(parseFloat(investAmount) * selectedPlan.roiPercent / 100)}</span>
+                          <span>USD Profit Basis</span><span className="text-gray-300 font-bold">{formatCurrency(investmentPreviewUsd)}</span>
                         </div>
                         <div className="flex justify-between text-gray-400">
-                          <span>Total Return</span><span className="text-[#c9a84c] font-bold">{formatCurrency(parseFloat(investAmount) * (1 + selectedPlan.roiPercent / 100))}</span>
+                          <span>Est. APX Reward at Maturity</span><span className="text-green-400 font-bold">+{formatApx(investmentPreviewApx)}</span>
+                        </div>
+                        <div className="flex justify-between text-gray-400">
+                          <span>USD Principal Returned at Maturity</span><span className="text-[#c9a84c] font-bold">{formatCurrency(parseFloat(investAmount))}</span>
                         </div>
                       </div>
                     )}
@@ -486,7 +494,8 @@ function UserDrawer({ userId, onClose, onRefresh }: { userId: string; onClose: (
                       </div>
                       <div className="text-right">
                         <div className="text-sm font-bold">{formatCurrency(inv.amount)}</div>
-                        <div className="text-green-400 text-xs">+{formatCurrency(inv.expectedProfit)}</div>
+                        <div className="text-green-400 text-xs">Expected APX ~{formatApx(usdToApx(Math.max(0, inv.expectedProfit - (inv.roiPaid || 0))))}</div>
+                        <div className="text-emerald-300 text-xs">APX credited: {formatApx(inv.apxPaid || 0)}</div>
                         <span className={`text-xs px-1.5 py-0.5 rounded-full mt-0.5 inline-block ${
                           inv.status === 'ACTIVE' ? 'bg-blue-400/10 text-blue-400' :
                           inv.status === 'COMPLETED' ? 'bg-green-400/10 text-green-400' :
@@ -517,7 +526,7 @@ function UserDrawer({ userId, onClose, onRefresh }: { userId: string; onClose: (
                         {tx.note && <div className="text-gray-600 text-xs mt-0.5 max-w-[160px] truncate">{tx.note}</div>}
                       </div>
                       <div className="text-right">
-                        <div className="text-sm font-bold">{formatCurrency(tx.amount)}</div>
+                        <div className="text-sm font-bold">{tx.currency === 'APX' ? formatApx(tx.amount) : formatCurrency(tx.amount)}</div>
                         <StatusBadge status={tx.status} />
                       </div>
                     </div>
@@ -660,7 +669,7 @@ function WithdrawalsTab() {
     <div className="space-y-5">
       <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-4 flex items-start gap-3">
         <AlertTriangle size={16} className="text-yellow-400 flex-shrink-0 mt-0.5" />
-        <p className="text-yellow-400 text-xs"><strong>Important:</strong> Approving means you have already sent the crypto. Rejecting refunds the user's balance automatically.</p>
+        <p className="text-yellow-400 text-xs"><strong>Important:</strong> Approving means you have already sent the crypto. Rejecting refunds the user&apos;s balance automatically.</p>
       </div>
       <div className="flex gap-2 flex-wrap">
         {['PENDING', 'APPROVED', 'REJECTED', 'ALL'].map(s => (
@@ -905,7 +914,7 @@ function UsersTab() {
         {loading ? <div className="flex items-center justify-center h-40"><Spinner /></div> : (
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-[#0a0a14]"><tr>{['User', 'Balance', 'Deposited', 'KYC', 'Status', 'Joined', 'Actions'].map(h => (
+              <thead className="bg-[#0a0a14]"><tr>{['User', 'USD Balance', 'USD Deposited', 'KYC', 'Status', 'Joined', 'Actions'].map(h => (
                 <th key={h} className="text-left px-5 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">{h}</th>
               ))}</tr></thead>
               <tbody className="divide-y divide-[#1e1e35]">
@@ -956,7 +965,7 @@ function RoiTab() {
     try {
       const res = await fetch('/api/admin/roi/run', { method: 'POST' })
       const data = await res.json()
-      if (res.ok) toast.success(`ROI run: ${data.investmentsDone} processed · $${data.totalProfitPaid?.toFixed(2)} paid`)
+      if (res.ok) toast.success(`Maturity run: ${data.investmentsDone} processed · ${Number(data.totalApxPaid || 0).toFixed(8)} APX credited`)
       else toast.error(data.error || 'ROI trigger failed — check server logs')
     } catch { toast.error('Failed to trigger ROI engine') }
     setTriggering(false)
@@ -965,7 +974,7 @@ function RoiTab() {
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <div><h3 className="font-bold">Daily ROI Engine Logs</h3><p className="text-gray-500 text-sm">Runs hourly via Vercel Cron and credits each investment's daily installment once per day.</p></div>
+        <div><h3 className="font-bold">Maturity Reward Engine Logs</h3><p className="text-gray-500 text-sm">Runs daily via Vercel Cron. At maturity, USD principal returns to the USD balance and outstanding plan profit is credited to the internal APX wallet. Historical rows may show legacy USD ROI payouts; new rows separate USD basis from APX credited.</p></div>
         <button onClick={triggerManual} disabled={triggering} className="btn-gold px-5 py-2.5 rounded-xl text-sm flex items-center gap-2 disabled:opacity-60">
           {triggering ? <Loader2 size={14} className="animate-spin" /> : <TrendingUp size={14} />} Trigger Manual Run
         </button>
@@ -975,7 +984,7 @@ function RoiTab() {
           logs.length === 0 ? <div className="text-center py-16 text-gray-600"><BarChart3 size={36} className="mx-auto mb-3 opacity-30" /><p>No ROI runs yet</p></div> : (
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-[#0a0a14]"><tr>{['Run Time', 'Found', 'Processed', 'Total Paid', 'Errors'].map(h => (
+              <thead className="bg-[#0a0a14]"><tr>{['Run Time', 'Found', 'Processed', 'USD Basis / Legacy Paid', 'APX Credited', 'Errors'].map(h => (
                 <th key={h} className="text-left px-5 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">{h}</th>
               ))}</tr></thead>
               <tbody className="divide-y divide-[#1e1e35]">
@@ -985,6 +994,7 @@ function RoiTab() {
                     <td className="px-5 py-4 text-sm font-medium">{log.investmentsFound}</td>
                     <td className="px-5 py-4 text-sm font-medium text-green-400">{log.investmentsDone}</td>
                     <td className="px-5 py-4 font-bold text-[#c9a84c] text-sm">{formatCurrency(log.totalProfitPaid)}</td>
+                    <td className="px-5 py-4 font-bold text-emerald-300 text-sm">{formatApx(log.totalApxPaid || 0)}</td>
                     <td className="px-5 py-4">{log.errors ? <span className="text-red-400 text-xs">{log.errors.slice(0, 60)}…</span> : <span className="text-green-400 text-xs">None</span>}</td>
                   </tr>
                 ))}
@@ -1119,9 +1129,10 @@ function OverviewTab() {
   if (loading) return <div className="flex items-center justify-center h-40"><Spinner /></div>
   const cards = [
     { label: 'Total Users', value: stats?.totalUsers ?? 0, icon: Users, color: '#c9a84c' },
-    { label: 'Total Deposits', value: formatCurrency(stats?.totalDeposits ?? 0), icon: ArrowDownCircle, color: '#60a5fa' },
-    { label: 'Total Withdrawals', value: formatCurrency(stats?.totalWithdrawals ?? 0), icon: ArrowUpCircle, color: '#f87171' },
-    { label: 'Total Profit Paid', value: formatCurrency(stats?.totalProfit ?? 0), icon: TrendingUp, color: '#34d399' },
+    { label: 'USD Deposits', value: formatCurrency(stats?.totalDeposits ?? 0), icon: ArrowDownCircle, color: '#60a5fa' },
+    { label: 'USD Withdrawals', value: formatCurrency(stats?.totalWithdrawals ?? 0), icon: ArrowUpCircle, color: '#f87171' },
+    { label: 'Historical USD Profit', value: formatCurrency(stats?.totalProfit ?? 0), icon: TrendingUp, color: '#34d399' },
+    { label: 'APX Rewards Credited', value: formatApx(stats?.totalApxRewards ?? 0), icon: Wallet, color: '#2dd4bf' },
     { label: 'Pending Deposits', value: stats?.pendingDeposits ?? 0, icon: Clock, color: '#fbbf24' },
     { label: 'Pending Withdrawals', value: stats?.pendingWithdrawals ?? 0, icon: Clock, color: '#fb923c' },
     { label: 'Pending KYC', value: stats?.pendingKyc ?? 0, icon: FileCheck, color: '#a78bfa' },

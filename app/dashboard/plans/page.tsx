@@ -8,6 +8,7 @@ import {
 import toast from 'react-hot-toast'
 import Link from 'next/link'
 import { durationLabel, formatUsd } from '@/lib/plans'
+import { formatApx, usdToApx } from '@/lib/apx'
 
 interface Plan {
   id: string
@@ -26,6 +27,7 @@ interface Investment {
   amount: number
   expectedProfit: number
   roiPaid?: number
+  apxPaid?: number
   status: string
   startDate: string
   endDate: string
@@ -56,8 +58,8 @@ function PurchaseModal({
   onClose: () => void
   loading: boolean
 }) {
-  const profit = (amount * plan.roiPercent) / 100
-  const total = amount + profit
+  const profitUsdBasis = Number(((amount * plan.roiPercent) / 100).toFixed(2))
+  const estimatedApx = usdToApx(profitUsdBasis)
   const palette = getPalette(plan.name)
 
   return (
@@ -80,8 +82,9 @@ function PurchaseModal({
           <div className="rounded-xl border p-4 space-y-3" style={{ borderColor: `${palette.accent}30`, background: palette.glow }}>
             {[
               ['Investment Amount', formatCurrency(amount), palette.accent],
-              [`Total Expected ROI (${plan.roiPercent}%)`, `+${formatCurrency(profit)}`, '#34d399'],
-              ['Total Return', formatCurrency(total), '#fff'],
+              [`USD profit basis (${plan.roiPercent}%)`, formatCurrency(profitUsdBasis), '#9ca3af'],
+              ['APX reward at maturity', `+${formatApx(estimatedApx)}`, '#34d399'],
+              ['USD principal returned at maturity', formatCurrency(amount), '#fff'],
               [`Duration`, `${plan.durationDays} day${plan.durationDays > 1 ? 's' : ''}`, '#9ca3af'],
               ['Referral Bonus', `${plan.referralBonus}%`, '#9ca3af'],
             ].map(([label, value, color]) => (
@@ -107,7 +110,7 @@ function PurchaseModal({
           )}
 
           <p className="text-gray-500 text-xs leading-relaxed">
-            By confirming, you agree that ${ amount.toFixed(2)} will be deducted from your balance and invested in the {plan.name}. Your ROI is credited daily, and your principal is returned when the plan matures.
+            By confirming, {formatCurrency(amount)} will be deducted from your USD balance and invested in the {plan.name}. At maturity, the USD principal returns to your USD balance and the plan profit is credited as APX using the published $0.00072/APX internal redemption rate. APX is credited to the internal APX wallet ledger; no on-chain transfer is made.
           </p>
         </div>
 
@@ -133,6 +136,7 @@ function PurchaseModal({
 function InvestmentCard({ inv }: { inv: Investment }) {
   const palette = getPalette(inv.plan.name)
   const isComplete = inv.status === 'COMPLETED'
+  const expectedApx = usdToApx(Math.max(0, inv.expectedProfit - (inv.roiPaid || 0)))
 
   return (
     <div className="card-dark p-5 relative overflow-hidden">
@@ -167,8 +171,9 @@ function InvestmentCard({ inv }: { inv: Investment }) {
 
       <div className="grid grid-cols-2 gap-3 text-xs">
         <div className="bg-[#0a0a14] rounded-lg p-3">
-          <div className="text-gray-500 mb-0.5">ROI Paid / Expected</div>
-          <div className="font-bold text-green-400">+{formatCurrency(inv.roiPaid || 0)} / {formatCurrency(inv.expectedProfit)}</div>
+          <div className="text-gray-500 mb-0.5">APX Paid / Remaining Estimate</div>
+          <div className="font-bold text-green-400">{formatApx(inv.apxPaid || 0)} / {formatApx(expectedApx)}</div>
+          {isComplete && !inv.apxPaid && inv.roiPaid ? <div className="mt-1 text-[10px] text-amber-300">This cycle was completed under the previous USD payout logic.</div> : null}
         </div>
         <div className="bg-[#0a0a14] rounded-lg p-3">
           <div className="text-gray-500 mb-0.5">{isComplete ? 'Completed' : 'Matures On'}</div>
@@ -362,7 +367,7 @@ export default function PlansPage() {
                       `Max: ${formatUsd(plan.maxAmount)}`,
                       `Duration: ${durationLabel(plan.durationDays)}`,
                       `Referral: ${plan.referralBonus}%`,
-                      `Profit on min: ${formatCurrency(plan.minAmount * plan.roiPercent / 100)}`,
+                      `Est. APX on min: ${formatApx(usdToApx(Number((plan.minAmount * plan.roiPercent / 100).toFixed(2))))}`,
                     ].map(f => (
                       <li key={f} className="flex items-center gap-2 text-xs text-gray-400">
                         <CheckCircle size={11} style={{ color: palette.accent }} className="flex-shrink-0" />
@@ -450,15 +455,15 @@ export default function PlansPage() {
                         <div className="font-bold text-sm">{formatCurrency(parseFloat(amount) || 0)}</div>
                       </div>
                       <div>
-                        <div className="text-xs text-gray-500 mb-1">Profit</div>
+                        <div className="text-xs text-gray-500 mb-1">Est. APX Reward</div>
                         <div className="font-bold text-sm text-green-400">
-                          +{formatCurrency((parseFloat(amount) || 0) * selectedPlan.roiPercent / 100)}
+                          +{formatApx(usdToApx(Number((((parseFloat(amount) || 0) * selectedPlan.roiPercent) / 100).toFixed(2))))}
                         </div>
                       </div>
                       <div>
-                        <div className="text-xs text-gray-500 mb-1">You Get Back</div>
+                        <div className="text-xs text-gray-500 mb-1">USD Principal Returned</div>
                         <div className="font-bold text-sm text-[#c9a84c]">
-                          {formatCurrency((parseFloat(amount) || 0) * (1 + selectedPlan.roiPercent / 100))}
+                          {formatCurrency(parseFloat(amount) || 0)}
                         </div>
                       </div>
                     </div>
@@ -518,15 +523,15 @@ export default function PlansPage() {
                     color: '#60a5fa',
                   },
                   {
-                    label: 'Pending Profit',
-                    value: formatCurrency(activeInvestments.reduce((a, i) => a + i.expectedProfit, 0)),
-                    sub: 'expected return',
+                    label: 'Pending APX Reward',
+                    value: formatApx(activeInvestments.reduce((a, i) => a + usdToApx(Math.max(0, i.expectedProfit - (i.roiPaid || 0))), 0)),
+                    sub: 'estimated at maturity; internal APX ledger',
                     color: '#34d399',
                   },
                   {
-                    label: 'All-Time Profit',
-                    value: formatCurrency(completedInvestments.reduce((a, i) => a + i.expectedProfit, 0)),
-                    sub: `from ${completedInvestments.length} completed`,
+                    label: 'APX Paid (All-Time)',
+                    value: formatApx(completedInvestments.reduce((a, i) => a + (i.apxPaid || 0), 0)),
+                    sub: `recorded in APX ledger across ${completedInvestments.length} completed`,
                     color: '#c9a84c',
                   },
                 ].map(s => (
